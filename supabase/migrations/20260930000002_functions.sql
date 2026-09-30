@@ -374,6 +374,7 @@ declare
   v_subtotal numeric := 0;
   v_discount numeric := 0;
   v_coupon record;
+  v_coupon_code text;  -- set only when a coupon applies (record may be unassigned)
   v_delivery record;
   v_total numeric;
   v_order public.orders;
@@ -476,6 +477,7 @@ begin
       raise exception '%', v_coupon.message using errcode = '22023';
     end if;
     v_discount := v_coupon.discount;
+    v_coupon_code := v_coupon.code;
   end if;
 
   -- delivery (on subtotal after discount)
@@ -499,7 +501,7 @@ begin
     trim(p_address ->> 'province'), trim(p_address ->> 'city'), trim(p_address ->> 'area'),
     trim(p_address ->> 'address_line'), nullif(trim(p_address ->> 'landmark'), ''),
     nullif(trim(p_address ->> 'postal_code'), ''),
-    v_subtotal, v_discount, case when v_discount > 0 then v_coupon.code end, v_delivery.charge, v_total,
+    v_subtotal, v_discount, case when v_discount > 0 then v_coupon_code end, v_delivery.charge, v_total,
     p_payment_method, v_pay_status, nullif(trim(p_payment_reference), ''),
     current_date + v_delivery.eta_min_days, current_date + v_delivery.eta_max_days,
     nullif(trim(p_notes), '')
@@ -520,9 +522,9 @@ begin
   values (v_order.id, 'placed', 'Order placed by customer', uid);
 
   if v_discount > 0 then
-    update public.coupons set used_count = used_count + 1 where code = v_coupon.code;
+    update public.coupons set used_count = used_count + 1 where code = v_coupon_code;
     insert into public.coupon_redemptions (coupon_id, user_id, order_id)
-    select id, uid, v_order.id from public.coupons where code = v_coupon.code;
+    select id, uid, v_order.id from public.coupons where code = v_coupon_code;
   end if;
 
   -- keep contact details on the profile for next time
