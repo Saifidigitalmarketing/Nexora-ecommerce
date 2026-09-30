@@ -8,7 +8,8 @@ Review the files, then run them in the Supabase SQL editor in this order:
 2. `supabase/migrations/20260930000002_functions.sql`
 3. `supabase/migrations/20260930000003_rls.sql`
 4. `supabase/migrations/20260930000004_storage.sql`
-5. `supabase/seed.sql` (optional starter data)
+5. `supabase/migrations/20261001000001_courier_settlement.sql`
+6. `supabase/seed.sql` (optional starter data)
 
 ## Tables
 
@@ -64,6 +65,32 @@ refresh product rating; `updated_at` timestamps.
 - `support_tickets`: owner creates/reads; admins reply.
 - `coupons`: active public coupons readable; admins manage.
 - Storage bucket `product-images`: public read, admin upload/update/delete.
+
+## Courier, COD and seller settlement (`20261001000001_courier_settlement.sql`)
+
+Additive only. Existing tables are not recreated; no data or policies are removed.
+
+| Change | Why |
+| --- | --- |
+| `vendors.commission_type`, `vendors.commission_value` (nullable) | Per-seller commission override; empty = default |
+| `settlement_settings` (1 row) | Default NEXORA commission (percent or fixed) — configurable, not hard-coded |
+| `couriers` | Courier companies, default charge per shipment, tracking URL template, `code` for future API integrations |
+| `shipments` | One per order per seller: courier, tracking number, shipment status, delivery date, COD amount, courier charges, other deductions, COD settlement status, amount received, courier settlement date and reference, order number snapshot |
+| `seller_settlements` | Seller ledger: sales, courier deductions, commission (rate + amount), seller payable, status `pending → available → approved → paid` (or `on_hold` / `cancelled`), approval, paid amount/date, payment reference |
+
+Functions: `admin_save_shipment`, `admin_verify_cod`, `admin_approve_settlement`,
+`admin_mark_settlement_paid`, `admin_hold_settlement`, `admin_link_seller`,
+`admin_recompute_open_settlements` (admins only), `seller_balance_summary` (admin or the store's
+seller), `is_vendor_owner`. Amounts are calculated by `_recompute_settlement`; they lock once COD is
+verified (shipment amounts) and once a settlement is approved (seller amounts).
+
+RLS: admins read everything; a seller (`profiles.role = 'vendor'` and `vendors.owner_id = auth.uid()`)
+can only **read** their own store's shipments and settlements. There are no insert/update/delete
+policies on shipments or settlements — every change goes through the admin functions.
+
+The same migration also relies on a fix in `20260930000002_functions.sql`: `place_order()` no longer
+fails for orders without a coupon in a fresh database session. If you already ran that file, run it
+again (it only uses `create or replace`).
 
 ## Make yourself admin
 

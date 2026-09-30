@@ -4,10 +4,12 @@ import { notFound } from "next/navigation";
 import { OrderSummaryBlocks, TrackingCard } from "@/components/account/OrderDetail";
 import { StatusChip } from "@/components/account/StatusChip";
 import { OrderActions } from "@/components/admin/OrderActions";
+import { ShipmentPanel, type OrderSellerPart } from "@/components/admin/ShipmentPanel";
 import { AdminPage, Card } from "@/components/admin/ui";
 import { Icon } from "@/components/ui/Icon";
 import { formatDateTime } from "@/lib/format";
 import { getSupabaseServer } from "@/lib/supabase/server";
+import type { Courier, SellerSettlement, Shipment } from "@/lib/settlement";
 import type { Order, OrderItem, OrderStatusEvent } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Order" };
@@ -17,11 +19,22 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ i
   const supabase = await getSupabaseServer();
   const { data: order } = await supabase.from("orders").select("*").eq("id", id).maybeSingle();
   if (!order) notFound();
-  const [{ data: items }, { data: history }, { data: riders }] = await Promise.all([
+  const [{ data: items }, { data: history }, { data: riders }, { data: shipments }, { data: settlements }, { data: couriers }, { data: vendors }] = await Promise.all([
     supabase.from("order_items").select("*").eq("order_id", id),
     supabase.from("order_status_history").select("id, status, note, created_at").eq("order_id", id).order("created_at"),
     supabase.from("riders").select("id, zone_city, is_active, profile:profiles(full_name, phone)").eq("is_active", true),
+    supabase.from("shipments").select("*").eq("order_id", id),
+    supabase.from("seller_settlements").select("*").eq("order_id", id),
+    supabase.from("couriers").select("*").eq("is_active", true).order("name"),
+    supabase.from("vendors").select("id, name"),
   ]);
+  const parts: OrderSellerPart[] = [];
+  ((items ?? []) as OrderItem[]).forEach((it) => {
+    if (!it.vendor_id) return;
+    const p = parts.find((x) => x.vendorId === it.vendor_id);
+    if (p) p.itemsTotal += Number(it.line_total);
+    else parts.push({ vendorId: it.vendor_id, vendorName: (vendors ?? []).find((v) => v.id === it.vendor_id)?.name ?? "Seller", itemsTotal: Number(it.line_total) });
+  });
   const riderList = ((riders ?? []) as unknown as { id: string; zone_city: string | null; profile: { full_name: string | null; phone: string | null } | null }[]).map((r) => ({
     id: r.id,
     name: `${r.profile?.full_name || "Rider"}${r.profile?.phone ? ` (${r.profile.phone})` : ""}`,
@@ -80,6 +93,18 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ i
             <OrderActions order={o} riders={riderList} />
           </Card>
           <TrackingCard order={o} history={(history ?? []) as OrderStatusEvent[]} />
+          {o.status !== "cancelled" && parts.length ? (
+            <Card title="Courier & COD">
+              <ShipmentPanel
+                orderId={o.id}
+                orderTotal={Number(o.total)}
+                parts={parts}
+                shipments={(shipments ?? []) as Shipment[]}
+                settlements={(settlements ?? []) as SellerSettlement[]}
+                couriers={(couriers ?? []) as Courier[]}
+              />
+            </Card>
+          ) : null}
         </div>
       </div>
     </AdminPage>

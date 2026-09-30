@@ -19,7 +19,8 @@ Stitch **Concept 2 — Clean Minimal Marketplace** design.
    2. `supabase/migrations/20260930000002_functions.sql` — triggers and RPC functions
    3. `supabase/migrations/20260930000003_rls.sql` — row level security policies
    4. `supabase/migrations/20260930000004_storage.sql` — `product-images` storage bucket
-   5. `supabase/seed.sql` — *optional* starter catalogue (categories, brands, products from the Stitch screens, delivery zones, 2 coupons)
+   5. `supabase/migrations/20261001000001_courier_settlement.sql` — couriers, COD and seller settlements
+   6. `supabase/seed.sql` — *optional* starter catalogue (categories, brands, products from the Stitch screens, delivery zones, 2 coupons)
 
    Or with the Supabase CLI: `supabase link` then `supabase db push` and `psql … -f supabase/seed.sql`.
 
@@ -133,6 +134,27 @@ truth for the storefront quote, checkout and `place_order()`:
 COD, Easypaisa, JazzCash and Bank Transfer work today (wallet/bank payments are verified by an
 admin using the Transaction ID). `src/lib/payments/index.ts` documents how to plug in an online
 gateway (card / wallet APIs) via a server route + webhook.
+
+### Courier, COD and seller settlement
+
+Flow: customer → seller's items → courier → **customer pays COD to the courier** → courier remits to
+NEXORA's account → admin verifies the COD received → NEXORA commission and courier deductions are
+taken → seller payable is credited → admin approves and pays the seller. Sellers never collect COD.
+
+- **Admin → Orders → (order) → Courier & COD:** book a shipment per seller (courier, tracking
+  number, COD amount, courier charges, other deductions, status, delivery date).
+- **Admin → Shipments & Settlements:** verify COD (amount received, settlement date, reference),
+  approve seller settlements, mark paid with a payment reference, settlement history, couriers,
+  default commission, per-seller commission override and linking a seller login to a store.
+- **Seller (`/seller`):** read-only total sales, pending/available balance, commission, courier
+  deductions, total paid and settlement history. Sellers cannot change any figure (RLS + RPC only).
+- Commission (percent or fixed, default + per seller) and courier charges are configured by the
+  admin — nothing is hard-coded. Figures are computed in the database and frozen once approved.
+- Seller payable = seller's items total − courier deductions − NEXORA commission. Coupon discounts
+  and the customer delivery fee are NEXORA's, not the seller's.
+- Courier APIs (TCS, Leopards, M&P, Trax…) are not integrated yet; `couriers.code` and
+  `src/lib/settlement.ts` (`CourierIntegration`) are the extension points. Keep API keys in server
+  environment variables only.
 
 ### Multi-vendor ready
 

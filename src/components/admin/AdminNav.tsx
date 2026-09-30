@@ -15,6 +15,7 @@ export const ADMIN_LINKS = [
   { href: "/admin/inventory", icon: "warehouse", label: "Inventory" },
   { href: "/admin/customers", icon: "group", label: "Customers" },
   { href: "/admin/payments", icon: "account_balance_wallet", label: "Payments" },
+  { href: "/admin/settlements", icon: "handshake", label: "Shipments & Settlements" },
   { href: "/admin/coupons", icon: "confirmation_number", label: "Coupons" },
   { href: "/admin/delivery", icon: "local_shipping", label: "Delivery Charges" },
   { href: "/admin/riders", icon: "two_wheeler", label: "Riders" },

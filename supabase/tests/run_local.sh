@@ -10,4 +10,7 @@ $PSQL -d postgres -c "do \$\$ begin create role anon nologin; exception when dup
 $PSQL -d $DB -f tests/local_supabase_stub.sql 2>&1 | grep -v 'already exists' || true
 for f in migrations/*.sql; do echo "-> $f"; $PSQL -d $DB -f "$f"; done
 echo "-> seed.sql"; $PSQL -d $DB -f seed.sql
-if [ "${1:-}" != "--no-tests" ]; then echo "-> tests"; $PSQL -d $DB -f tests/rls_and_rpc_tests.sql; fi
+if [ "${1:-}" != "--no-tests" ]; then
+  echo "-> tests"; $PSQL -d $DB -f tests/rls_and_rpc_tests.sql
+  echo "-> settlement tests"; $PSQL -d $DB -f tests/settlement_tests.sql
+fi
