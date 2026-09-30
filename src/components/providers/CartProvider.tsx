@@ -36,9 +36,12 @@ interface CartState {
   replace: (items: CartItem[]) => void;
   clearSelected: () => void;
   clear: () => void;
+  coupon: string | null;
+  setCoupon: (code: string | null) => void;
 }
 
 const STORAGE_KEY = "nx_cart_v1";
+const COUPON_KEY = "nx_coupon_v1";
 const MAX_QTY = 20;
 const CartContext = createContext<CartState | null>(null);
 
@@ -47,11 +50,13 @@ export const cartKey = (productId: string, variantId: string | null) => `${produ
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [ready, setReady] = useState(false);
+  const [coupon, setCouponState] = useState<string | null>(null);
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) setItems(JSON.parse(raw) as CartItem[]);
+      setCouponState(localStorage.getItem(COUPON_KEY));
     } catch {
       /* storage unavailable */
     }
@@ -110,8 +115,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
       replace: (next) => setItems(next),
       clearSelected: () => setItems((list) => list.filter((i) => !i.selected)),
       clear: () => setItems([]),
+      coupon,
+      setCoupon: (code) => {
+        setCouponState(code);
+        try {
+          if (code) localStorage.setItem(COUPON_KEY, code);
+          else localStorage.removeItem(COUPON_KEY);
+        } catch {}
+      },
     }),
-    [items, ready, add],
+    [items, ready, add, coupon],
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
