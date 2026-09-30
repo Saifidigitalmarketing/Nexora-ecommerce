@@ -8,4 +8,6 @@ const compat = new FlatCompat({ baseDirectory: __dirname });
 export default [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   { ignores: [".next/**", "node_modules/**", "public/sw.js"] },
+  // Product images come from admin-supplied URLs / Supabase Storage on any host.
+  { rules: { "@next/next/no-img-element": "off" } },
 ];
