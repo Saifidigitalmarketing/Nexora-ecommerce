@@ -1,13 +1,13 @@
 /* NEXORA service worker
  * - precaches the offline page and app icons
- * - network-first for pages (falls back to cache, then /offline)
+ * - network-first for pages (falls back to cache, then /offline.html)
  * - stale-while-revalidate for static assets and images
  * - never caches Supabase API/auth traffic, admin or rider pages
  */
-const VERSION = "nexora-v1";
+const VERSION = "nexora-v2";
 const STATIC_CACHE = `${VERSION}-static`;
 const PAGE_CACHE = `${VERSION}-pages`;
-const PRECACHE = ["/offline", "/fonts/material-symbols-outlined.woff2", "/icons/icon-192.png", "/icons/icon-512.png", "/brand/nexora-logo.svg", "/brand/nexora-mark.svg"];
+const PRECACHE = ["/offline.html", "/fonts/material-symbols-outlined.woff2", "/icons/icon-192.png", "/icons/icon-512.png", "/brand/nexora-logo.svg", "/brand/nexora-mark.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(STATIC_CACHE).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
@@ -45,7 +45,7 @@ self.addEventListener("fetch", (event) => {
           }
           return res;
         })
-        .catch(async () => (!isPrivate && (await caches.match(request))) || (await caches.match("/offline")) || Response.error()),
+        .catch(async () => (!isPrivate && (await caches.match(request))) || (await caches.match("/offline.html")) || Response.error()),
     );
     return;
   }
