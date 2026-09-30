@@ -11,7 +11,7 @@ export function AdminPage({ title, subtitle, actions, children }: { title: strin
           <h1 className="font-headline-md text-headline-md text-on-surface">{title}</h1>
           {subtitle ? <p className="font-body-md text-body-md text-secondary">{subtitle}</p> : null}
         </div>
-        {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+        {actions ? <div className="flex flex-wrap items-center gap-2 max-w-full">{actions}</div> : null}
       </div>
       {children}
     </div>
@@ -20,7 +20,7 @@ export function AdminPage({ title, subtitle, actions, children }: { title: strin
 
 export function Card({ title, actions, children, className }: { title?: string; actions?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <section className={cn("bg-surface-container-lowest rounded-xl shadow-sm border border-surface-container-high/60", className)}>
+    <section className={cn("min-w-0 bg-surface-container-lowest rounded-xl shadow-sm border border-surface-container-high/60", className)}>
       {title ? (
         <div className="flex items-center justify-between px-space-md pt-space-md pb-2">
           <h2 className="font-label-lg text-label-lg font-bold text-on-surface">{title}</h2>

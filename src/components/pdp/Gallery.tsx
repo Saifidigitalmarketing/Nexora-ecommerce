@@ -31,7 +31,7 @@ export function Gallery({ images, name, officialTag }: { images: Img[]; name: st
         >
           {list.map((img, i) => (
             <div key={img.id} className="w-full h-full shrink-0 snap-center px-margin flex items-center justify-center">
-              <ProductImage src={img.url} alt={img.alt ?? name} eager={i === 0} className="h-full w-auto max-w-full object-contain" />
+              <ProductImage src={img.url} alt={img.alt ?? name} eager={i === 0} className="w-full h-full object-contain" />
             </div>
           ))}
         </div>

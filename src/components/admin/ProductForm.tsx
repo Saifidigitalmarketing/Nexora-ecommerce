@@ -183,7 +183,7 @@ export function ProductForm({ initial, categories, brands, vendors }: { initial:
     set("variants", [...v.variants, { options: Object.fromEntries(optionNames.map((n) => [n, ""])), color_hex: "", price: v.price, compare_at_price: v.compare_at_price, stock: "0", sku: "", is_active: true }]);
 
   return (
-    <div className="grid lg:grid-cols-3 gap-space-md items-start">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-space-md items-start">
       <div className="lg:col-span-2 flex flex-col gap-space-md">
         <Card title="Basic information">
           <div className="flex flex-col gap-3">

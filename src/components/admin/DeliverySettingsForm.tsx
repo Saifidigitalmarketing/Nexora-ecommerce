@@ -62,7 +62,7 @@ export function DeliverySettingsForm({ initial }: { initial: DeliverySettings })
   };
 
   return (
-    <div className="grid lg:grid-cols-2 gap-space-md">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-space-md">
       <div className="flex flex-col gap-3">
         <Select label="Pricing mode" name="mode" value={s.mode} onChange={(e) => setS({ ...s, mode: e.target.value as DeliverySettings["mode"] })} hint="Area-based uses the zones below, falling back to the base charge.">
           <option value="fixed">Fixed — same charge everywhere</option>

@@ -48,7 +48,7 @@ export function StoreSettingsForm({ store, accounts, trending }: { store: StoreI
 
   return (
     <div className="flex flex-col gap-space-md">
-      <div className="grid lg:grid-cols-2 gap-space-md">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-space-md">
         <div className="flex flex-col gap-3">
           <p className="font-label-lg text-label-lg">Store & support</p>
           <Input label="Store name" name="store_name" value={info.name ?? ""} onChange={(e) => setInfo({ ...info, name: e.target.value })} />

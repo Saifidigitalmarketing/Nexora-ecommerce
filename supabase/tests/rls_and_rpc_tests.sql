@@ -64,6 +64,10 @@ do $$ begin
   raise exception 'customer became admin';
 exception when insufficient_privilege then null; end $$;
 do $$ begin
+  update public.profiles set email = 'admin@example.com' where id = auth.uid();
+  raise exception 'customer changed profile email';
+exception when insufficient_privilege then null; end $$;
+do $$ begin
   update public.profiles set phone = '03001234567' where id = auth.uid();
   assert (select phone from public.profiles where id = auth.uid()) = '03001234567', 'own profile update failed';
   -- cannot see other profiles
@@ -258,9 +262,10 @@ reset role;
 set role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
 do $$ begin
-  insert into public.reviews (product_id, user_id, rating, body, is_verified_purchase)
-  values ((select id from public.products where slug = 'khaadi-pure-linen-kurta'), auth.uid(), 3, 'Nice', true);
+  insert into public.reviews (product_id, user_id, rating, body, is_verified_purchase, author_name)
+  values ((select id from public.products where slug = 'khaadi-pure-linen-kurta'), auth.uid(), 3, 'Nice', true, 'NEXORA Official');
   assert (select is_verified_purchase from public.reviews where user_id = auth.uid()) = false, 'fake verified purchase';
+  assert (select author_name from public.reviews where user_id = auth.uid()) = 'Sara Ahmed', 'author name spoofed';
   -- cancel own order restocks
   perform public.cancel_my_order((select id from public.orders limit 1), 'Changed my mind');
   assert (select status from public.orders limit 1) = 'cancelled', 'cancel failed';

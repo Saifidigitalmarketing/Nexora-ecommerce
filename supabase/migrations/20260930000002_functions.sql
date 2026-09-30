@@ -92,6 +92,11 @@ begin
   if new.id is distinct from old.id then
     raise exception 'Profile id is immutable' using errcode = '42501';
   end if;
+  -- email mirrors auth.users and is used by admins to find accounts
+  if new.email is distinct from old.email and auth.uid() is not null and not public.is_admin() then
+    raise exception 'Email can only be changed by support' using errcode = '42501';
+  end if;
+  new.created_at := old.created_at;
   return new;
 end $$;
 
@@ -144,8 +149,11 @@ begin
       select 1 from public.orders o join public.order_items oi on oi.order_id = o.id
       where o.user_id = new.user_id and oi.product_id = new.product_id and o.status = 'delivered'
     );
-    if new.author_name is null or new.author_name = '' then
-      select nullif(full_name, '') into new.author_name from public.profiles where id = new.user_id;
+    if not public.is_admin() or new.author_name is null or new.author_name = '' then
+      select coalesce(nullif(full_name, ''), 'NEXORA Customer') into new.author_name from public.profiles where id = new.user_id;
+    end if;
+    if not public.is_admin() then
+      new.is_approved := true;
     end if;
   elsif not public.is_admin() then
     -- customers may edit text/rating but not moderation fields
@@ -153,6 +161,7 @@ begin
     new.is_approved := old.is_approved;
     new.user_id := old.user_id;
     new.product_id := old.product_id;
+    new.author_name := old.author_name;
   end if;
   return new;
 end $$;
@@ -460,6 +469,8 @@ begin
 
   -- coupon
   if coalesce(trim(p_coupon_code), '') <> '' then
+    -- serialise concurrent redemptions of the same code
+    perform 1 from public.coupons where code = upper(trim(p_coupon_code)) for update;
     select * into v_coupon from public.validate_coupon(p_coupon_code, v_subtotal);
     if not v_coupon.valid then
       raise exception '%', v_coupon.message using errcode = '22023';

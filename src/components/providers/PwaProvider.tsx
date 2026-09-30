@@ -70,7 +70,7 @@ export function PwaProvider({ children }: { children: ReactNode }) {
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
 
-    if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
+    if ("serviceWorker" in navigator && (process.env.NODE_ENV === "production" || process.env.NEXT_PUBLIC_SW_DEV === "1")) {
       navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
     }
 

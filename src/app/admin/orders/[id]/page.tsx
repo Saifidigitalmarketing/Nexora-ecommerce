@@ -40,7 +40,7 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ i
         </Link>
       }
     >
-      <div className="grid lg:grid-cols-3 gap-space-md items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-space-md items-start">
         <div className="lg:col-span-2 flex flex-col gap-space-md">
           <Card title="Customer">
             <div className="grid sm:grid-cols-2 gap-2 font-body-md text-body-md">

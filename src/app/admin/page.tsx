@@ -43,7 +43,7 @@ export default async function AdminDashboard() {
         <StatCard icon="warning" label="Low stock" value={s.low_stock} hint="5 or fewer units" href="/admin/inventory?low=1" />
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-space-md">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-space-md">
         <Card title="Sales — last 14 days" className="lg:col-span-2">
           <SalesChart data={s.sales_last_14_days} />
         </Card>

@@ -18,7 +18,7 @@ export function HeroBanner({ banners }: { banners: Banner[] }) {
   return (
     <section className="px-margin mt-space-sm" aria-roledescription="carousel" aria-label="Promotions">
       <div className="relative w-full rounded-xl overflow-hidden shadow-sm bg-surface-container-lowest flex flex-col justify-end min-h-[220px] lg:min-h-[320px]">
-        <div className="absolute inset-0 bg-cover bg-center bg-inverse-surface transition-[background-image] duration-500" style={b.image_url ? { backgroundImage: `url('${b.image_url}')` } : undefined}>
+        <div className="absolute inset-0 bg-cover bg-center bg-inverse-surface transition-[background-image] duration-500" style={b.image_url ? { backgroundImage: `url("${encodeURI(b.image_url).replace(/"/g, "%22")}")` } : undefined}>
           <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent" />
         </div>
         <div className="relative z-10 p-space-md lg:p-space-xl flex flex-col gap-space-xs text-white">

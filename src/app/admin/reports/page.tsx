@@ -76,9 +76,9 @@ export default async function AdminReports({ searchParams }: { searchParams: Pro
       subtitle={`Last ${days} days`}
       actions={
         <>
-          <div className="flex gap-1">
+          <div className="flex gap-1 overflow-x-auto no-scrollbar max-w-full">
             {RANGES.map((r) => (
-              <Link key={r.v} href={`/admin/reports?days=${r.v}`} className={`px-3 py-1.5 rounded-full font-label-md text-label-md ${Number(r.v) === days ? "bg-on-surface text-surface" : "bg-surface-container-lowest shadow-sm"}`}>
+              <Link key={r.v} href={`/admin/reports?days=${r.v}`} className={`shrink-0 px-3 py-1.5 rounded-full font-label-md text-label-md ${Number(r.v) === days ? "bg-on-surface text-surface" : "bg-surface-container-lowest shadow-sm"}`}>
                 {r.l}
               </Link>
             ))}
@@ -93,7 +93,7 @@ export default async function AdminReports({ searchParams }: { searchParams: Pro
         <StatCard icon="shopping_cart" label="Avg. order value" value={formatPKR(aov)} />
         <StatCard icon="local_shipping" label="Delivered" value={valid.filter((o) => o.status === "delivered").length} hint={STATUS_LABEL.delivered} />
       </div>
-      <div className="grid lg:grid-cols-2 gap-space-md">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-space-md">
         <Card title="Top products">
           <Table head={["Product", "Units", "Sales"]}>
             {top.map(([name, p]) => (
@@ -105,7 +105,7 @@ export default async function AdminReports({ searchParams }: { searchParams: Pro
             ))}
           </Table>
         </Card>
-        <div className="flex flex-col gap-space-md">
+        <div className="flex flex-col gap-space-md min-w-0">
           <Card title="By payment method">
             <Table head={["Method", "Orders", "Sales"]}>
               {byMethod.map(([m, g]) => (

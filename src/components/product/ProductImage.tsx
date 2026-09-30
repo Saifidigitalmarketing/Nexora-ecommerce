@@ -1,38 +1,45 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { cn } from "@/lib/format";
 
-/** Image with a neutral placeholder when missing or broken. */
+/**
+ * Image with a neutral placeholder behind it. A broken image is hidden via
+ * the DOM (no React state), so a load error that happens before hydration
+ * can never change the rendered tree.
+ */
 export function ProductImage({ src, alt, className, eager }: { src?: string | null; alt: string; className?: string; eager?: boolean }) {
-  const [failed, setFailed] = useState(false);
   const ref = useRef<HTMLImageElement>(null);
   useEffect(() => {
-    setFailed(false);
-  }, [src]);
-  // The image may have failed before hydration attached onError.
-  useEffect(() => {
     const img = ref.current;
-    if (img && img.complete && img.naturalWidth === 0) setFailed(true);
+    if (img && img.complete && img.naturalWidth === 0) img.style.visibility = "hidden";
   }, [src]);
-  if (!src || failed) {
-    return (
-      <div className={cn("w-full h-full flex items-center justify-center text-outline-variant", className)} role="img" aria-label={alt}>
-        <Icon name="image" className="text-[36px]" />
-      </div>
-    );
-  }
+
   return (
-    <img
-      ref={ref}
-      src={src}
-      alt={alt}
-      loading={eager ? "eager" : "lazy"}
-      decoding="async"
-      referrerPolicy="no-referrer"
-      onError={() => setFailed(true)}
-      className={className}
-    />
+    <span className="relative block w-full h-full">
+      <span className="absolute inset-0 flex items-center justify-center text-outline-variant" aria-hidden>
+        <Icon name="image" className="text-[36px]" />
+      </span>
+      {src ? (
+        <img
+          ref={ref}
+          src={src}
+          alt={alt}
+          loading={eager ? "eager" : "lazy"}
+          decoding="async"
+          referrerPolicy="no-referrer"
+          onError={(e) => {
+            e.currentTarget.style.visibility = "hidden";
+          }}
+          onLoad={(e) => {
+            e.currentTarget.style.visibility = "";
+          }}
+          className={cn("relative", className)}
+        />
+      ) : (
+        <span className="sr-only">{alt}</span>
+      )}
+    </span>
   );
 }
