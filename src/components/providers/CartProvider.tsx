@@ -27,6 +27,8 @@ interface CartState {
   ready: boolean;
   count: number;
   add: (item: NewCartItem) => void;
+  /** Select only this item (added if needed) — used by Buy Now. */
+  buyNow: (item: NewCartItem) => void;
   setQuantity: (key: string, qty: number) => void;
   remove: (key: string) => void;
   toggleSelected: (key: string, selected: boolean) => void;
@@ -92,6 +94,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
       ready,
       count: items.reduce((n, i) => n + i.quantity, 0),
       add,
+      buyNow: (item) => {
+        const key = cartKey(item.productId, item.variantId);
+        const limit = Math.max(0, Math.min(MAX_QTY, item.maxStock));
+        setItems((list) => {
+          const others = list.filter((i) => i.key !== key).map((i) => ({ ...i, selected: false }));
+          return [...others, { ...item, key, selected: true, quantity: Math.min(limit, item.quantity ?? 1) }];
+        });
+      },
       setQuantity: (key, qty) =>
         setItems((list) => list.map((i) => (i.key === key ? { ...i, quantity: Math.max(1, Math.min(qty, MAX_QTY, i.maxStock || MAX_QTY)) } : i))),
       remove: (key) => setItems((list) => list.filter((i) => i.key !== key)),

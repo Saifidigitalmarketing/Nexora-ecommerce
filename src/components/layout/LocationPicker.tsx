@@ -9,22 +9,32 @@ import { cn } from "@/lib/format";
 
 const SHORT: Record<string, string> = { "Islamabad Capital Territory": "ICT" };
 
-export function LocationPicker() {
+export function LocationPicker({ variant = "header" }: { variant?: "header" | "chip" }) {
   const { location, setLocation } = useDeliveryLocation();
   const [open, setOpen] = useState(false);
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="flex items-center gap-1 pl-1 min-h-[44px]"
-        aria-label={`Delivery location: ${location.city}. Change`}
-      >
-        <Icon name="location_on" className="text-[18px] text-primary" />
-        <span className="font-label-md text-label-md text-on-surface truncate max-w-[120px]">{location.city}, PK</span>
-        <Icon name="expand_more" className="text-[16px] text-secondary" />
-      </button>
+      {variant === "chip" ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="font-label-sm text-label-sm text-primary hover:underline px-2 py-1 rounded bg-primary/10"
+        >
+          Change
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="flex items-center gap-1 pl-1 min-h-[44px]"
+          aria-label={`Delivery location: ${location.city}. Change`}
+        >
+          <Icon name="location_on" className="text-[18px] text-primary" />
+          <span className="font-label-md text-label-md text-on-surface truncate max-w-[120px]">{location.city}, PK</span>
+          <Icon name="expand_more" className="text-[16px] text-secondary" />
+        </button>
+      )}
       <Sheet open={open} onClose={() => setOpen(false)} title="Deliver to">
         <p className="font-body-sm text-body-sm text-secondary mb-3">Choose your city to see delivery charges and times.</p>
         <div className="flex flex-col gap-4">

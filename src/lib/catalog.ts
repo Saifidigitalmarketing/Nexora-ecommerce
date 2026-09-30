@@ -25,6 +25,7 @@ export interface ProductQuery {
   q?: string;
   categoryIds?: string[];
   brandSlugs?: string[];
+  vendorSlug?: string;
   minPrice?: number;
   maxPrice?: number;
   inStock?: boolean;
@@ -63,6 +64,10 @@ export async function listProducts(query: ProductQuery = {}): Promise<{ items: P
   if (query.brandSlugs?.length) {
     const { data: brands } = await supabase.from("brands").select("id").in("slug", query.brandSlugs);
     req = req.in("brand_id", (brands ?? []).map((b) => b.id).concat("00000000-0000-0000-0000-000000000000"));
+  }
+  if (query.vendorSlug) {
+    const { data: vendor } = await supabase.from("vendors").select("id").eq("slug", query.vendorSlug).maybeSingle();
+    req = req.eq("vendor_id", vendor?.id ?? "00000000-0000-0000-0000-000000000000");
   }
   if (query.minPrice != null) req = req.gte("price", query.minPrice);
   if (query.maxPrice != null) req = req.lte("price", query.maxPrice);

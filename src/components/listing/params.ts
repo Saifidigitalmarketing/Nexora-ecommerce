@@ -10,6 +10,7 @@ const num = (v: string | undefined) => (v && !Number.isNaN(Number(v)) ? Number(v
 export interface ListingState {
   q?: string;
   brands: string[];
+  store?: string;
   min?: number;
   max?: number;
   sort: SortKey;
@@ -29,6 +30,7 @@ export function parseListing(sp: RawParams): ListingState {
   const sort = one(sp.sort) as SortKey | undefined;
   return {
     q: one(sp.q)?.slice(0, 80) || undefined,
+    store: one(sp.store) || undefined,
     brands: (one(sp.brand) ?? "").split(",").filter(Boolean).slice(0, 20),
     min: num(one(sp.min)),
     max: num(one(sp.max)),
@@ -48,6 +50,7 @@ export function toQuery(s: ListingState, categoryIds?: string[]): ProductQuery {
   return {
     q: s.q,
     brandSlugs: s.brands,
+    vendorSlug: s.store,
     minPrice: s.min,
     maxPrice: s.max,
     sort: s.sort,
