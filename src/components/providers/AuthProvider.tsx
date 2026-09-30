@@ -29,9 +29,11 @@ export function AuthProvider({ initialUserId, initialProfile, children }: { init
     const supabase = getSupabaseBrowser();
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       const next = session?.user?.id ?? null;
-      if (event === "SIGNED_IN" || event === "SIGNED_OUT") {
-        setUserId(next);
-        if (!next) setProfile(null);
+      // Login/signup forms navigate themselves; here we only mirror state.
+      if (event === "SIGNED_IN") setUserId(next);
+      if (event === "SIGNED_OUT") {
+        setUserId(null);
+        setProfile(null);
         router.refresh();
       }
     });

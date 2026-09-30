@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { SUPABASE_ANON_KEY, SUPABASE_URL, isSupabaseConfigured } from "./env";
 
-const PROTECTED = ["/account", "/checkout", "/wishlist", "/orders", "/admin", "/rider"];
+const PROTECTED = ["/account", "/checkout", "/wishlist", "/orders", "/admin", "/rider", "/reset-password"];
 
 /** Refreshes the auth session cookie and redirects guests away from private areas. */
 export async function updateSession(request: NextRequest) {
