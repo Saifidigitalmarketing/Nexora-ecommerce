@@ -86,25 +86,16 @@ export function SearchBar({ defaultValue = "", placeholder = "Search 200,000+ au
         autoFocus={autoFocus}
         enterKeyHint="search"
         aria-label="Search products"
-        className="w-full h-12 pl-12 pr-20 bg-transparent rounded-full font-body-md text-body-md text-on-surface placeholder:text-secondary focus:outline-none"
+        className={`w-full h-12 pl-12 ${q ? "pr-20" : "pr-12"} bg-transparent rounded-full font-body-md text-body-md text-on-surface placeholder:text-secondary focus:outline-none`}
         placeholder={placeholder}
       />
       <div className="absolute right-2 flex items-center gap-1 pr-1">
+        {/* Visual (camera) search is hidden until an image-search service is added */}
         {q ? (
           <button type="button" onClick={() => setQ("")} aria-label="Clear search" className="w-8 h-8 flex items-center justify-center rounded-full text-secondary hover:text-on-surface">
             <Icon name="close" className="text-[18px]" />
           </button>
-        ) : (
-          <button
-            type="button"
-            title="Scan or search by image"
-            aria-label="Search by image"
-            onClick={() => toast("Visual search is coming soon", "info")}
-            className="w-8 h-8 flex items-center justify-center rounded-full text-secondary hover:text-primary transition-colors"
-          >
-            <Icon name="photo_camera" className="text-[19px]" />
-          </button>
-        )}
+        ) : null}
         <button
           type="button"
           title="Voice search"
