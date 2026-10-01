@@ -50,7 +50,7 @@ export async function ProductListing({
       {items.length ? (
         <>
           <section className="px-margin pb-space-lg">
-            <div className={state.view === "list" ? "grid grid-cols-1 lg:grid-cols-2 gap-3 w-full" : "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 w-full"}>
+            <div className={state.view === "list" ? "grid grid-cols-1 lg:grid-cols-2 gap-3 w-full" : "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 lg:gap-3 w-full"}>
               {items.map((p) => (
                 <ResultCard key={p.id} product={p} layout={state.view} />
               ))}
