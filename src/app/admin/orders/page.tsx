@@ -71,7 +71,7 @@ export default async function AdminOrders({ searchParams }: { searchParams: Prom
               <Td className="tabular whitespace-nowrap">{formatPKR(o.total)}</Td>
               <Td>
                 <p className="font-body-sm text-body-sm">{PAYMENT_LABEL[o.payment_method]}</p>
-                <PaymentChip status={o.payment_status} />
+                <PaymentChip status={o.payment_status} method={o.payment_method} />
               </Td>
               <Td>
                 <StatusChip status={o.status} />

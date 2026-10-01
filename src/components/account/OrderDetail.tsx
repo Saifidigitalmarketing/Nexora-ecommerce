@@ -72,7 +72,7 @@ export function OrderSummaryBlocks({ order, items }: { order: Order; items: Orde
         </h3>
         <div className="flex items-center justify-between">
           <span className="font-body-md text-body-md">{PAYMENT_LABEL[order.payment_method]}</span>
-          <PaymentChip status={order.payment_status} />
+          <PaymentChip status={order.payment_status} method={order.payment_method} />
         </div>
         {order.payment_reference ? <p className="font-body-sm text-body-sm text-secondary">Transaction ID: {order.payment_reference}</p> : null}
       </section>

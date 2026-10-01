@@ -15,7 +15,9 @@ export function waUrl(phone: string) {
 }
 
 export function RiderOrderCard({ order, items, compact }: { order: Order; items: OrderItem[]; compact?: boolean }) {
-  const collect = order.payment_method === "cod" && order.payment_status !== "paid";
+  const collect = order.payment_method === "cod" && order.payment_status === "pending";
+  // delivered COD: the rider holds the cash until NEXORA verifies the handover
+  const handover = order.payment_method === "cod" && order.payment_status === "awaiting_verification";
   return (
     <article className="bg-surface-container-lowest rounded-xl shadow-sm p-space-md flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
@@ -73,7 +75,7 @@ export function RiderOrderCard({ order, items, compact }: { order: Order; items:
         </div>
         <div className={`p-2 rounded-lg ${collect ? "bg-primary/10" : "bg-surface-container-low"}`}>
           <p className="font-label-sm text-label-sm text-secondary uppercase">{PAYMENT_LABEL[order.payment_method]}</p>
-          <p className={`font-label-lg text-label-lg ${collect ? "text-primary" : ""}`}>{collect ? `Collect ${formatPKR(order.total)}` : "Already paid"}</p>
+          <p className={`font-label-lg text-label-lg ${collect ? "text-primary" : ""}`}>{collect ? `Collect ${formatPKR(order.total)}` : handover ? `Hand over ${formatPKR(order.total)} to NEXORA` : "Already paid"}</p>
         </div>
       </div>
 

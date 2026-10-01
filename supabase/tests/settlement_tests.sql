@@ -153,4 +153,106 @@ begin
 end $$;
 reset role;
 
+\echo 'S8. COD rule: delivered is not "COD received by NEXORA"'
+-- the two-seller order: only Sapphire's COD is verified, so the order is not paid yet
+do $$ begin
+  assert (select payment_status from public.orders where id = (select id from t_s)) <> 'paid', 'order paid before all COD verified';
+end $$;
+create temp table t_r (k text primary key, id uuid);
+grant all on t_r to authenticated;
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
+do $$
+declare r jsonb;
+begin
+  r := public.place_order(jsonb_build_array(jsonb_build_object('product_id', (select id from public.products where slug = 'anker-nano-30w-charger'), 'quantity', 1)),
+    '{"full_name": "Sara Ahmed", "phone": "03011234567"}', '{"province": "Punjab", "city": "Lahore", "area": "Gulberg", "address_line": "House 1, Main Blvd"}', 'cod');
+  insert into t_r values ('rider', (r ->> 'order_id')::uuid);
+  r := public.place_order(jsonb_build_array(jsonb_build_object('product_id', (select id from public.products where slug = 'anker-nano-30w-charger'), 'quantity', 1)),
+    '{"full_name": "Sara Ahmed", "phone": "03011234567"}', '{"province": "Punjab", "city": "Lahore", "area": "Gulberg", "address_line": "House 1, Main Blvd"}', 'cod');
+  insert into t_r values ('courier', (r ->> 'order_id')::uuid);
+  r := public.place_order(jsonb_build_array(jsonb_build_object('product_id', (select id from public.products where slug = 'anker-nano-30w-charger'), 'quantity', 1)),
+    '{"full_name": "Sara Ahmed", "phone": "03011234567"}', '{"province": "Punjab", "city": "Lahore", "area": "Gulberg", "address_line": "House 1, Main Blvd"}', 'easypaisa', 'EP1234567890');
+  insert into t_r values ('prepaid', (r ->> 'order_id')::uuid);
+end $$;
+
+-- (a) NEXORA rider flow
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000ad', false);
+select public.admin_assign_rider((select id from t_r where k = 'rider'), '00000000-0000-0000-0000-0000000000e1');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000e1', false);
+do $$
+declare o uuid := (select id from t_r where k = 'rider');
+begin
+  perform public.rider_update_order(o, 'accept');
+  perform public.rider_update_order(o, 'picked_up');
+  perform public.rider_update_order(o, 'on_the_way');
+  perform public.rider_update_order(o, 'delivered');
+end $$;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000ad', false);
+do $$
+declare
+  o uuid := (select id from t_r where k = 'rider');
+  sh uuid;
+begin
+  assert (select payment_status from public.orders where id = o) = 'awaiting_verification', 'rider delivery marked COD paid';
+  assert (select status from public.payments where order_id = o) = 'awaiting_verification', 'payment row paid on delivery';
+  assert (select meta ->> 'collected_by' from public.payments where order_id = o) = 'rider', 'collection not recorded';
+  sh := public.admin_save_shipment(o, (select id from public.vendors where slug = 'anker-official'),
+    (select id from public.couriers where code = 'nexora_rider'), 'RIDER-1', 'delivered', 5000, 0, 0);
+  assert (select status from public.seller_settlements where shipment_id = sh) = 'pending', 'payable before cash handover verified';
+  perform public.admin_verify_cod(sh, 5000, current_date, 'HANDOVER-1', 'received');
+  assert (select status from public.seller_settlements where shipment_id = sh) = 'pending', 'payable on unverified handover';
+  assert (select payment_status from public.orders where id = o) = 'awaiting_verification', 'paid on unverified handover';
+  perform public.admin_verify_cod(sh, 5000, current_date, 'HANDOVER-1', 'verified');
+  assert (select status from public.seller_settlements where shipment_id = sh) = 'available', 'not payable after verify';
+  assert (select payment_status from public.orders where id = o) = 'paid', 'order not paid after COD verified';
+  -- withdrawing the verification (dispute) reverses both
+  perform public.admin_verify_cod(sh, 4000, current_date, 'HANDOVER-1', 'disputed');
+  assert (select status from public.seller_settlements where shipment_id = sh) = 'pending', 'still payable after dispute';
+  assert (select payment_status from public.orders where id = o) = 'awaiting_verification', 'still paid after dispute';
+  perform public.admin_verify_cod(sh, 5000, current_date, 'HANDOVER-1', 'verified');
+  perform public.admin_approve_settlement((select id from public.seller_settlements where shipment_id = sh));
+  -- locked once approved
+  begin
+    perform public.admin_verify_cod(sh, 1, current_date, 'X', 'disputed');
+    raise exception 'COD changed after settlement approved';
+  exception when sqlstate 'P0001' then null; end;
+end $$;
+
+-- (b) external courier flow: admin marks the order delivered
+do $$
+declare
+  o uuid := (select id from t_r where k = 'courier');
+  sh uuid;
+begin
+  perform public.admin_update_order_status(o, 'confirmed', null);
+  sh := public.admin_save_shipment(o, (select id from public.vendors where slug = 'anker-official'),
+    (select id from public.couriers where code = 'tcs'), 'TCS-S8', 'delivered', 5000, 250, 0);
+  perform public.admin_update_order_status(o, 'delivered', 'Delivered by TCS');
+  assert (select payment_status from public.orders where id = o) = 'awaiting_verification', 'admin delivery marked COD paid';
+  assert (select status from public.seller_settlements where shipment_id = sh) = 'pending', 'payable before courier remittance';
+  perform public.admin_verify_cod(sh, 4750, current_date, 'TCS-REMIT-S8');
+  assert (select payment_status from public.orders where id = o) = 'paid', 'courier COD verified but order not paid';
+  assert (select status from public.seller_settlements where shipment_id = sh) = 'available', 'not payable after verify';
+end $$;
+
+-- (c) prepaid: only payable once the payment is verified AND delivered
+do $$
+declare
+  o uuid := (select id from t_r where k = 'prepaid');
+  sh uuid;
+begin
+  assert (select payment_status from public.orders where id = o) = 'awaiting_verification', 'easypaisa not awaiting verification';
+  sh := public.admin_save_shipment(o, (select id from public.vendors where slug = 'anker-official'),
+    (select id from public.couriers where code = 'tcs'), 'TCS-S8P', 'booked', 0, 250, 0);
+  assert (select cod_settlement_status from public.shipments where id = sh) = 'not_applicable', 'prepaid has COD';
+  assert (select status from public.seller_settlements where shipment_id = sh) = 'pending', 'unverified prepaid is payable';
+  perform public.admin_set_payment_status(o, 'paid', 'TID checked');
+  assert (select status from public.seller_settlements where shipment_id = sh) = 'pending', 'prepaid payable before delivery';
+  perform public.admin_save_shipment(o, (select id from public.vendors where slug = 'anker-official'),
+    (select id from public.couriers where code = 'tcs'), 'TCS-S8P', 'delivered', 0, 250, 0);
+  assert (select status from public.seller_settlements where shipment_id = sh) = 'available', 'verified + delivered prepaid not payable';
+end $$;
+reset role;
+
 \echo 'ALL SETTLEMENT TESTS PASSED'

@@ -26,7 +26,7 @@ export default async function AdminPayments({ searchParams }: { searchParams: Pr
   const { data } = await req;
   const rows = (data ?? []) as Order[];
   return (
-    <AdminPage title="Payments" subtitle="Verify Easypaisa, JazzCash and bank transfers by Transaction ID. COD is marked paid on delivery.">
+    <AdminPage title="Payments" subtitle="Verify Easypaisa, JazzCash and bank transfers by Transaction ID. COD becomes paid only after NEXORA verifies the cash in Shipments & Settlements.">
       <Suspense>
         <FilterBar
           placeholder="Order no. or TID"
@@ -54,7 +54,7 @@ export default async function AdminPayments({ searchParams }: { searchParams: Pr
               <Td className="tabular whitespace-nowrap">{formatPKR(o.total)}</Td>
               <Td className="font-label-md text-label-md">{o.payment_reference ?? "—"}</Td>
               <Td>
-                <PaymentChip status={o.payment_status} />
+                <PaymentChip status={o.payment_status} method={o.payment_method} />
               </Td>
               <Td>{o.payment_method !== "cod" && o.payment_status !== "paid" && o.status !== "cancelled" ? <PaymentButtons orderId={o.id} /> : null}</Td>
             </tr>

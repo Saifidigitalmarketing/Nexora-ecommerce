@@ -42,6 +42,12 @@ export const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = {
   refunded: "Refunded",
 };
 
+/** Payment label; a delivered COD order is "collected" until NEXORA verifies the cash. */
+export function paymentStatusLabel(status: PaymentStatus, method?: PaymentMethod): string {
+  if (method === "cod" && status === "awaiting_verification") return "COD collected";
+  return PAYMENT_STATUS_LABEL[status];
+}
+
 /** Status chip styling — neutral/emerald, error only for failures. */
 export function statusTone(status: OrderStatus): string {
   if (status === "delivered") return "bg-primary-fixed/40 text-on-primary-fixed-variant";

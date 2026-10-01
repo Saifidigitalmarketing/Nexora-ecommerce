@@ -20,7 +20,8 @@ Stitch **Concept 2 — Clean Minimal Marketplace** design.
    3. `supabase/migrations/20260930000003_rls.sql` — row level security policies
    4. `supabase/migrations/20260930000004_storage.sql` — `product-images` storage bucket
    5. `supabase/migrations/20261001000001_courier_settlement.sql` — couriers, COD and seller settlements
-   6. `supabase/seed.sql` — *optional* starter catalogue (categories, brands, products from the Stitch screens, delivery zones, 2 coupons)
+   6. `supabase/migrations/20261002000001_cod_payment_states.sql` — delivered ≠ COD received (COD payment states)
+   7. `supabase/seed.sql` — *optional* starter catalogue (categories, brands, products from the Stitch screens, delivery zones, 2 coupons)
 
    Or with the Supabase CLI: `supabase link` then `supabase db push` and `psql … -f supabase/seed.sql`.
 
@@ -132,7 +133,8 @@ truth for the storefront quote, checkout and `place_order()`:
 ### Payments
 
 COD, Easypaisa, JazzCash and Bank Transfer work today (wallet/bank payments are verified by an
-admin using the Transaction ID). `src/lib/payments/index.ts` documents how to plug in an online
+admin using the Transaction ID). A delivered COD order is only *COD collected*; it becomes paid when
+NEXORA verifies the cash in Shipments & Settlements (see `docs/DATABASE.md`). `src/lib/payments/index.ts` documents how to plug in an online
 gateway (card / wallet APIs) via a server route + webhook.
 
 ### Courier, COD and seller settlement
@@ -141,7 +143,8 @@ Flow: customer → seller's items → courier → **customer pays COD to the cou
 NEXORA's account → admin verifies the COD received → NEXORA commission and courier deductions are
 taken → seller payable is credited → admin approves and pays the seller. Sellers never collect COD.
 
-- **Admin → Orders → (order) → Courier & COD:** book a shipment per seller (courier, tracking
+- **Admin → Orders → (order) → Courier & COD:** book a shipment per seller (use the **NEXORA Rider**
+  courier for orders your own riders delivered) (courier, tracking
   number, COD amount, courier charges, other deductions, status, delivery date).
 - **Admin → Shipments & Settlements:** verify COD (amount received, settlement date, reference),
   approve seller settlements, mark paid with a payment reference, settlement history, couriers,
