@@ -12,7 +12,7 @@ type SpeechRecognitionLike = {
   stop: () => void;
   onresult: ((e: { results: { 0: { 0: { transcript: string } } } }) => void) | null;
   onend: (() => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((e: { error?: string }) => void) | null;
 };
 
 /** Stitch search pill: submit → /search, mic → Web Speech API voice search. */
@@ -42,7 +42,8 @@ export function SearchBar({ defaultValue = "", placeholder = "Search 200,000+ au
       return;
     }
     const rec = new Ctor();
-    rec.lang = "en-PK";
+    // en-IN is widely supported by Chrome's speech service and suits Pakistani English
+    rec.lang = "en-IN";
     rec.interimResults = false;
     rec.onresult = (e) => {
       const text = e.results[0][0].transcript;
@@ -50,9 +51,17 @@ export function SearchBar({ defaultValue = "", placeholder = "Search 200,000+ au
       go(text);
     };
     rec.onend = () => setListening(false);
-    rec.onerror = () => {
+    rec.onerror = (e) => {
       setListening(false);
-      toast("Couldn't hear that — please try again", "error");
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        toast("Allow microphone access in your browser to use voice search", "error");
+      } else if (e.error === "no-speech" || e.error === "aborted") {
+        toast("Didn't catch that — tap the mic and speak again", "info");
+      } else if (e.error === "network") {
+        toast("Voice search needs an internet connection", "error");
+      } else {
+        toast("Couldn't hear that — please try again", "error");
+      }
     };
     recRef.current = rec;
     setListening(true);
