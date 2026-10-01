@@ -10,6 +10,9 @@ import { ProductGrid } from "@/components/product/ProductCard";
 import { Icon } from "@/components/ui/Icon";
 import { SearchBar } from "@/components/ui/SearchBar";
 import { getActiveBanners, getCategories, getFeaturedBrands, getPublicSetting, listProducts } from "@/lib/catalog";
+import { SITE_TITLE, pageMetadata } from "@/lib/seo";
+
+export const metadata = pageMetadata({ title: SITE_TITLE, absoluteTitle: true, path: "/" });
 
 
 export default async function HomePage() {

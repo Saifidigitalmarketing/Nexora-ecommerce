@@ -10,18 +10,34 @@ import { ProductGrid } from "@/components/product/ProductCard";
 import { WishlistButton } from "@/components/product/WishlistButton";
 import { Icon } from "@/components/ui/Icon";
 import { getCategories, getProductBySlug, getProductReviews, listProducts } from "@/lib/catalog";
-import { formatCount } from "@/lib/format";
+import { formatCount, formatPKR } from "@/lib/format";
+import { pageMetadata, summarize } from "@/lib/seo";
 
 type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const p = await getProductBySlug(slug);
-  if (!p) return { title: "Product not found" };
-  return {
+  if (!p) return { title: "Product not found", robots: { index: false } };
+  // description only from the product's own catalogue data
+  const description =
+    summarize(p.short_description) ??
+    summarize(p.description) ??
+    `${p.name}${p.brand ? ` by ${p.brand.name}` : ""} — ${formatPKR(p.price)} on NEXORA. Cash on Delivery across Pakistan.`;
+  const meta = pageMetadata({
     title: p.name,
-    description: p.short_description ?? undefined,
-    openGraph: { title: p.name, description: p.short_description ?? undefined, images: p.images[0]?.url ? [p.images[0].url] : undefined },
+    description,
+    path: `/product/${p.slug}`,
+    images: p.images.slice(0, 4).map((i) => ({ url: i.url, alt: i.alt ?? p.name })),
+  });
+  return {
+    ...meta,
+    other: {
+      "product:price:amount": String(p.price),
+      "product:price:currency": "PKR",
+      "product:availability": p.stock > 0 ? "in stock" : "out of stock",
+      ...(p.brand ? { "product:brand": p.brand.name } : {}),
+    },
   };
 }
 
