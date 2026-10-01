@@ -28,10 +28,18 @@ Stitch **Concept 2 — Clean Minimal Marketplace** design.
    Every script is idempotent (`if not exists`, `on conflict do nothing`) and never drops data.
    See [`docs/DATABASE.md`](docs/DATABASE.md) for what each table and policy does.
 
-3. **Authentication → URL Configuration:** set *Site URL* to your domain and add
-   `https://your-domain/auth/callback` to *Redirect URLs* (also `http://localhost:3000/auth/callback` for local dev).
-4. **Authentication → Providers → Email:** keep enabled. Decide whether "Confirm email" is on
-   (recommended in production; sign-up then shows a "check your email" screen).
+3. **Authentication → URL Configuration:** set *Site URL* to your domain (e.g.
+   `https://nexora-ecommerce-phi.vercel.app`) and add `https://your-domain/**` to *Redirect URLs*
+   (also `http://localhost:3000/**` for local dev).
+4. **Authentication → Providers → Email:** keep enabled with **Confirm email ON**.
+5. **Authentication → Email Templates:** paste `supabase/templates/confirm-signup.html` into
+   *Confirm signup* and `supabase/templates/reset-password.html` into *Reset password*. These links
+   (`/auth/confirm?token_hash=…`) work in whatever browser or app the email is opened in — the
+   default Supabase links only sign the user in when opened in the same browser they signed up in.
+   Without the templates the app still works: the user is told their email is confirmed and signs in.
+6. **Authentication → SMTP Settings:** set up a custom SMTP sender (e.g. Resend, Brevo, Zoho, SES).
+   Supabase's built-in sender is for testing only — it is heavily rate-limited and may only deliver
+   to your own team's addresses, so customers would not receive confirmation emails.
 
 ### 1.2 App
 
@@ -67,6 +75,8 @@ email and clicks **Make rider**. Riders open `/rider` and only ever see orders a
 - **Admin → Delivery Charges:** review the base charge and zones.
 - Replace `public/brand/nexora-logo.svg` / `nexora-mark.svg` with the final logo artwork and run
   `node scripts/generate-icons.mjs` to regenerate the PWA icons.
+- Social sharing image: `public/og/nexora-og.png` (regenerate with `node scripts/generate-og.mjs`).
+  Set `NEXT_PUBLIC_SITE_URL` to the live domain so Open Graph and canonical URLs are absolute.
 - Seed product images point at the Stitch image CDN; upload your own photos from Admin → Products.
 
 ---
@@ -92,7 +102,8 @@ src/
     (stack)/         pushed screens with back header: product, checkout, orders, wishlist, auth, help
     admin/           admin dashboard (role = admin)
     rider/           rider app (role = rider)
-    auth/callback    email confirmation / password recovery
+    auth/callback    email links with ?code= (PKCE, same browser)
+    auth/confirm     email links with ?token_hash= (any browser; see supabase/templates)
     api/payments/    webhook placeholder for future online gateways
     manifest.ts      PWA manifest
   components/        ui/ layout/ product/ listing/ pdp/ cart/ checkout/ account/ admin/ rider/ providers/
