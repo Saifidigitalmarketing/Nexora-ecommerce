@@ -2009,7 +2009,7 @@ on conflict (slug) do nothing;
 -- Hero banner
 -- ---------------------------------------------------------------------
 insert into public.banners (title, subtitle, badge, image_url, cta_label, cta_link, sort_order)
-select 'Summer Minimalist Living', 'Up to 40% off daily mindful design essentials.', 'Curated Editorial',
+select 'Summer Minimalist Living', 'Daily mindful design essentials, curated for you.', 'Curated Editorial',
   'https://lh3.googleusercontent.com/aida-public/AB6AXuBCM5UZUcy1QFF1Y14RQyj6LFyKQQ9Nr_rcgkINqQQJRyzG4lOUx9poeQ7r3wDz7Kgcpo3GF6hASfdopAOdcQrLkoW-WZHEcysfb_6qNjuhYBR9hwDNsDkDmpViD-Uh4_rBA19SR2onT44qpuKV8K2y3I_Sdjy2kFRKDMleEgw4H5D_4eztAq2JGJRhqp79SQDrb5TMhMG7vWPHZWw2i-1d1l5Uy9TGZxQciUfWr_WNUJM79ZRKGsw',
   'Shop Collection', '/categories/home-living', 1
 where not exists (select 1 from public.banners);
@@ -2140,9 +2140,11 @@ with src (slug, name, vendor, brand, category, price, compare_at, stock, badges,
 insert into public.products (slug, name, vendor_id, brand_id, category_id, price, compare_at_price, stock, badges,
                              is_featured, is_flash_deal, flash_deal_ends_at, flash_deal_stock_total,
                              short_description, description, specs, tags)
-select s.slug, s.name, v.id, b.id, c.id, s.price, s.compare_at, s.stock, s.badges,
-       s.featured, s.flash, case when s.flash then now() + interval '7 days' end,
-       case when s.flash then s.stock end,
+-- No discounts or flash deals by default: the owner turns them on per product
+-- from Admin → Products (compare-at price / flash deal) when a sale starts.
+select s.slug, s.name, v.id, b.id, c.id, s.price, null, s.stock, s.badges,
+       s.featured, false, null,
+       null,
        s.short_desc, s.description, s.specs::jsonb, s.tags
 from src s
 join public.vendors v on v.slug = s.vendor
@@ -2188,7 +2190,7 @@ where not exists (select 1 from public.product_images pi where pi.product_id = p
 insert into public.product_variants (product_id, label, options, color_hex, price, compare_at_price, stock, sort_order)
 select p.id, f.finish || ' / ' || s.storage,
        jsonb_build_object('Finish', f.finish, 'Storage', s.storage),
-       f.hex, s.price, s.compare_at, 8, f.ord * 10 + s.ord
+       f.hex, s.price, null, 8, f.ord * 10 + s.ord
 from public.products p
 cross join (values ('Natural Titanium', '#9c9589', 1), ('White Titanium', '#e3e4e5', 2),
                    ('Desert Titanium', '#c5b49e', 3), ('Black Titanium', '#3b3a3e', 4)) f(finish, hex, ord)
@@ -2199,7 +2201,7 @@ where p.slug = 'iphone-16-pro-max'
 
 -- Variants: Sapphire navy kurta (size)
 insert into public.product_variants (product_id, label, options, price, compare_at_price, stock, sort_order)
-select p.id, 'Size ' || sz.size, jsonb_build_object('Size', sz.size), 4250, 4750, 12, sz.ord
+select p.id, 'Size ' || sz.size, jsonb_build_object('Size', sz.size), 4250, null, 12, sz.ord
 from public.products p
 cross join (values ('S', 1), ('M', 2), ('L', 3), ('XL', 4)) sz(size, ord)
 where p.slug = 'sapphire-mens-fine-cotton-kurta-navy'

@@ -85,7 +85,7 @@ def main(path):
         out.append(f"insert into public.brands (name, slug, short_code) values ({q(b)}, {q(slugify(b))}, {q(b[:2].upper())}) on conflict (slug) do nothing;")
 
     seen = set()
-    flash = {p["id"] for p in sorted(data, key=lambda p: -p.get("discountPercentage", 0))[:8]}
+    flash = set()  # no flash deals by default
     featured_ids = {p["id"] for p in data if p["id"] % 9 == 0}
     for p in data:
         _, sub, _, _ = CATS[p["category"]]
@@ -95,7 +95,8 @@ def main(path):
         seen.add(slug)
         price = nice_price(p["price"], p["category"])
         disc = p.get("discountPercentage", 0) or 0
-        compare = int(round(price / (1 - disc / 100) / 100.0)) * 100 if disc >= 5 else None
+        # no discounts by default — the owner enables sales per product in Admin
+        compare = None
         if compare is not None and compare <= price:
             compare = None
         specs = []
