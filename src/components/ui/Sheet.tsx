@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Icon } from "./Icon";
 
 /** Mobile bottom sheet (12px top radius, Level 3 elevation). Centered dialog on desktop. */
@@ -18,7 +19,9 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
   }, [open, onClose]);
 
   if (!open) return null;
-  return (
+  // Portal to <body>: a parent with backdrop-filter (the blurred sticky header) would
+  // otherwise become the containing block and trap this fixed overlay inside it.
+  return createPortal(
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center" role="dialog" aria-modal="true" aria-label={title}>
       <button type="button" aria-label="Close" className="absolute inset-0 bg-on-surface/40 backdrop-blur-[2px]" onClick={onClose} />
       <div className="relative w-full sm:max-w-md max-h-[85vh] overflow-y-auto bg-surface-container-lowest rounded-t-xl sm:rounded-xl shadow-[0_8px_30px_rgba(17,24,39,0.08)] pb-safe">
@@ -30,6 +33,7 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
         </div>
         <div className="px-margin pb-margin">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

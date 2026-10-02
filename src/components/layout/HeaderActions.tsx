@@ -26,7 +26,7 @@ export function HeaderActions() {
   }, [userId]);
 
   return (
-    <div className="flex items-center gap-space-xs">
+    <div className="flex items-center gap-space-xs shrink-0">
       {/* Desktop keeps the same destinations as the mobile bottom nav */}
       <Link href="/search" aria-label="Search" className="hidden lg:flex w-11 h-11 items-center justify-center text-on-surface hover:text-primary">
         <Icon name="search" className="text-[22px]" />
