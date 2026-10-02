@@ -21,7 +21,8 @@ Stitch **Concept 2 — Clean Minimal Marketplace** design.
    4. `supabase/migrations/20260930000004_storage.sql` — `product-images` storage bucket
    5. `supabase/migrations/20261001000001_courier_settlement.sql` — couriers, COD and seller settlements
    6. `supabase/migrations/20261002000001_cod_payment_states.sql` — delivered ≠ COD received (COD payment states)
-   7. `supabase/seed.sql` — *optional* starter catalogue (categories, brands, products from the Stitch screens, delivery zones, 2 coupons)
+   7. `supabase/migrations/20261003000001_order_shipment_sync.sql` — rider settlements, cancel, order ↔ shipment sync
+   8. `supabase/seed.sql` — *optional* starter catalogue (categories, brands, products from the Stitch screens, delivery zones, 2 coupons)
 
    Or with the Supabase CLI: `supabase link` then `supabase db push` and `psql … -f supabase/seed.sql`.
 
@@ -154,8 +155,8 @@ Flow: customer → seller's items → courier → **customer pays COD to the cou
 NEXORA's account → admin verifies the COD received → NEXORA commission and courier deductions are
 taken → seller payable is credited → admin approves and pays the seller. Sellers never collect COD.
 
-- **Admin → Orders → (order) → Courier & COD:** book a shipment per seller (use the **NEXORA Rider**
-  courier for orders your own riders delivered) (courier, tracking
+- **Admin → Orders → (order) → Courier & COD:** book a shipment per seller. Orders assigned to your own
+  riders get a **NEXORA Rider** shipment automatically; courier shipment status updates the order status (courier, tracking
   number, COD amount, courier charges, other deductions, status, delivery date).
 - **Admin → Shipments & Settlements:** verify COD (amount received, settlement date, reference),
   approve seller settlements, mark paid with a payment reference, settlement history, couriers,

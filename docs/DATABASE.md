@@ -10,7 +10,8 @@ Review the files, then run them in the Supabase SQL editor in this order:
 4. `supabase/migrations/20260930000004_storage.sql`
 5. `supabase/migrations/20261001000001_courier_settlement.sql`
 6. `supabase/migrations/20261002000001_cod_payment_states.sql`
-7. `supabase/seed.sql` (optional starter data)
+7. `supabase/migrations/20261003000001_order_shipment_sync.sql`
+8. `supabase/seed.sql` (optional starter data)
 
 ## Tables
 
@@ -109,6 +110,22 @@ courier row; no tables, columns, enums or policies change.
 - Rider-delivered orders: record the rider handover in *Courier & COD* with the **NEXORA Rider** courier, then verify it like courier COD.
 - Prepaid orders (Easypaisa / JazzCash / bank) become seller payable only when the payment is verified **and** the shipment is delivered.
 - A COD verification can no longer be changed once the seller settlement is approved or paid.
+
+## Order ↔ shipment ↔ settlement sync (`20261003000001_order_shipment_sync.sql`)
+
+Only replaces functions and adds internal helpers; no tables, columns, enums or policies change.
+
+- **Rider orders:** assigning a rider books one `NEXORA Rider` shipment per seller (tracking number =
+  order number) and a pending seller settlement. Shipments are unique per order + seller and
+  settlements unique per shipment, so reassigning never duplicates them.
+- **Cancel:** admin or customer cancellation cancels the order's booked / in-transit shipments, so their
+  settlements become `cancelled` (and stay cancelled on recompute). Orders with a delivered shipment
+  can't be cancelled — mark the shipment Returned first. Shipments of a cancelled order can't be edited.
+- **Status sync:** rider picked up / on the way → shipments In Transit; rider or admin delivered →
+  open shipments Delivered. A courier shipment In Transit moves a Placed / Confirmed / Processing order
+  to On The Way; when every seller's shipment is Delivered the order becomes Delivered. COD is then
+  only *collected* — it becomes paid when an admin verifies it. Returned shipments never auto-cancel
+  an order (cancelling restocks items, so it stays an admin decision).
 
 ## Make yourself admin
 
