@@ -73,18 +73,27 @@ export const SHIPMENT_STATUS_LABEL: Record<ShipmentStatus, string> = {
 };
 
 export const COD_STATUS_LABEL: Record<CodSettlementStatus, string> = {
-  pending: "Awaiting courier",
-  received: "Received (unverified)",
-  verified: "Verified",
+  pending: "COD pending",
+  received: "Received — not verified",
+  verified: "COD received by NEXORA",
   disputed: "Disputed",
   not_applicable: "Prepaid — no COD",
 };
 
+/**
+ * COD stage for a shipment. "Delivered" never means NEXORA has the money:
+ * after delivery the cash is with the courier/rider until an admin verifies it.
+ */
+export function codStageLabel(shipment: { status: ShipmentStatus; cod_settlement_status: CodSettlementStatus }): string {
+  if (shipment.cod_settlement_status === "pending" && shipment.status === "delivered") return "Collected — courier settlement pending";
+  return COD_STATUS_LABEL[shipment.cod_settlement_status];
+}
+
 export const SETTLEMENT_STATUS_LABEL: Record<SellerSettlementStatus, string> = {
-  pending: "Pending",
-  available: "Available",
-  approved: "Approved",
-  paid: "Paid",
+  pending: "Not yet payable",
+  available: "Seller payable",
+  approved: "Payout pending",
+  paid: "Seller paid",
   on_hold: "On hold",
   cancelled: "Cancelled",
 };

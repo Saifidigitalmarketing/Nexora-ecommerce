@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
 import { Icon } from "@/components/ui/Icon";
@@ -18,6 +18,29 @@ export function SignupForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [checkEmail, setCheckEmail] = useState(false);
+  const [resent, setResent] = useState<"idle" | "sending" | "sent">("idle");
+  // after confirming, land on the account page unless a specific page was requested
+  const afterConfirm = next === "/" ? "/account" : next;
+  const emailRedirectTo = () => `${window.location.origin}/auth/callback?next=${encodeURIComponent(afterConfirm)}`;
+
+  // Confirmed in another tab of this browser? Pick up the session when the user comes back.
+  useEffect(() => {
+    if (!checkEmail) return;
+    const check = () => {
+      if (document.visibilityState !== "visible") return;
+      void getSupabaseBrowser()
+        .auth.getSession()
+        .then(({ data }) => {
+          if (data.session) window.location.replace(afterConfirm);
+        });
+    };
+    window.addEventListener("focus", check);
+    document.addEventListener("visibilitychange", check);
+    return () => {
+      window.removeEventListener("focus", check);
+      document.removeEventListener("visibilitychange", check);
+    };
+  }, [checkEmail, afterConfirm]);
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: e.target.value });
 
@@ -38,12 +61,17 @@ export function SignupForm() {
       password: form.password,
       options: {
         data: { full_name: form.full_name.trim(), phone: form.phone.trim() },
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+        emailRedirectTo: emailRedirectTo(),
       },
     });
     setLoading(false);
     if (err) {
       setError(err.message);
+      return;
+    }
+    if (data.user && !data.session && data.user.identities?.length === 0) {
+      // Supabase hides whether an email is registered; an empty identity list means it already is
+      setError("An account with this email already exists. Please sign in instead.");
       return;
     }
     if (data.session) {
@@ -61,6 +89,31 @@ export function SignupForm() {
         <p className="font-label-lg text-label-lg">Confirm your email</p>
         <p className="font-body-md text-body-md text-secondary">
           We sent a link to <strong>{form.email}</strong>. Open it to activate your NEXORA account.
+        </p>
+        <Button
+          variant="outline"
+          className="mt-2 w-full"
+          loading={resent === "sending"}
+          disabled={resent === "sent"}
+          onClick={async () => {
+            setResent("sending");
+            const { error: err } = await getSupabaseBrowser().auth.resend({ type: "signup", email: form.email.trim(), options: { emailRedirectTo: emailRedirectTo() } });
+            setResent(err ? "idle" : "sent");
+            if (err) setError(err.message);
+          }}
+        >
+          {resent === "sent" ? "Email sent again" : "Resend email"}
+        </Button>
+        {error ? (
+          <p role="alert" className="font-body-sm text-body-sm text-error">
+            {error}
+          </p>
+        ) : null}
+        <p className="font-label-md text-label-md text-secondary">
+          Already confirmed?{" "}
+          <Link href={`/login?next=${encodeURIComponent(afterConfirm)}`} className="text-primary font-semibold">
+            Sign in
+          </Link>
         </p>
       </div>
     );

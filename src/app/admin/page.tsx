@@ -24,7 +24,7 @@ export default async function AdminDashboard() {
   const supabase = await getSupabaseServer();
   const [{ data: stats, error }, { data: recent }, { data: lowStock }] = await Promise.all([
     supabase.rpc("admin_dashboard_stats"),
-    supabase.from("orders").select("id, order_number, customer_name, city, total, status, payment_status, created_at").order("created_at", { ascending: false }).limit(8),
+    supabase.from("orders").select("id, order_number, customer_name, city, total, status, payment_method, payment_status, created_at").order("created_at", { ascending: false }).limit(8),
     supabase.from("products").select("id, name, stock").eq("is_active", true).lte("stock", 5).order("stock").limit(8),
   ]);
   if (error) throw new Error(error.message);
@@ -81,7 +81,7 @@ export default async function AdminDashboard() {
                 <StatusChip status={o.status} />
               </Td>
               <Td>
-                <PaymentChip status={o.payment_status} />
+                <PaymentChip status={o.payment_status} method={o.payment_method} />
               </Td>
               <Td className="text-secondary whitespace-nowrap">{formatDateTime(o.created_at)}</Td>
             </tr>

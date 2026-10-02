@@ -10,7 +10,7 @@ import { useToast } from "@/components/ui/Toast";
 import { getSupabaseBrowser } from "@/lib/supabase/client";
 import { cn, formatPKR } from "@/lib/format";
 import {
-  COD_STATUS_LABEL,
+  codStageLabel,
   SETTLEMENT_STATUS_LABEL,
   SHIPMENT_STATUS_LABEL,
   settlementTone,
@@ -133,7 +133,7 @@ function PartForm({
         <div className="flex flex-col gap-1.5 pt-2 border-t border-surface-container-high font-body-sm text-body-sm tabular">
           <div className="flex items-center justify-between">
             <span className="text-secondary">COD settlement</span>
-            <span className={cn("px-2 py-0.5 rounded-full font-label-sm text-label-sm", settlementTone(shipment.cod_settlement_status))}>{COD_STATUS_LABEL[shipment.cod_settlement_status]}</span>
+            <span className={cn("px-2 py-0.5 rounded-full font-label-sm text-label-sm", settlementTone(shipment.cod_settlement_status))}>{codStageLabel(shipment)}</span>
           </div>
           {link ? (
             <a href={link} target="_blank" rel="noopener noreferrer" className="text-primary flex items-center gap-1">
@@ -192,7 +192,7 @@ export function ShipmentPanel({
   }
   return (
     <div className="flex flex-col gap-3">
-      <p className="font-body-sm text-body-sm text-secondary">Customers pay COD to the courier; the courier remits to NEXORA. Sellers are paid after COD is verified.</p>
+      <p className="font-body-sm text-body-sm text-secondary">Customers pay COD to the courier or NEXORA rider; the cash is remitted to NEXORA. Delivered is not paid — sellers are paid only after NEXORA verifies the COD.</p>
       {parts.map((p) => {
         const sh = shipments.find((s) => s.vendor_id === p.vendorId);
         return (

@@ -9,7 +9,7 @@ import { CommissionSettings, SellersTable, type SellerRow } from "@/components/a
 import { AdminPage, Card, StatCard, Table, Td } from "@/components/admin/ui";
 import { cn, formatDate, formatPKR } from "@/lib/format";
 import {
-  COD_STATUS_LABEL,
+  codStageLabel,
   SETTLEMENT_STATUS_LABEL,
   SHIPMENT_STATUS_LABEL,
   settlementTone,
@@ -106,7 +106,7 @@ export default async function AdminSettlements({ searchParams }: { searchParams:
                 <Td className="tabular whitespace-nowrap">{formatPKR(s.courier_charges)}</Td>
                 <Td className="tabular whitespace-nowrap">{formatPKR(s.other_deductions)}</Td>
                 <Td>
-                  <Chip tone={settlementTone(s.cod_settlement_status)}>{COD_STATUS_LABEL[s.cod_settlement_status]}</Chip>
+                  <Chip tone={settlementTone(s.cod_settlement_status)}>{codStageLabel(s)}</Chip>
                   {s.cod_settlement_reference ? <p className="font-body-sm text-body-sm text-secondary mt-0.5">Ref {s.cod_settlement_reference}</p> : null}
                 </Td>
                 <Td className="tabular whitespace-nowrap">

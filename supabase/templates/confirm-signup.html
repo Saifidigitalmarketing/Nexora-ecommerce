@@ -1,0 +1,11 @@
+<!-- Supabase → Authentication → Email Templates → "Confirm signup". Subject: Confirm your NEXORA account -->
+<div style="font-family:Inter,Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#151c27">
+  <p style="font-size:22px;font-weight:800;color:#006948;margin:0 0 4px">NEXORA</p>
+  <p style="font-size:13px;color:#575e70;margin:0 0 24px">Everything. One Place.</p>
+  <p style="font-size:16px;margin:0 0 16px">Welcome to NEXORA! Tap the button below to confirm your email and open your account.</p>
+  <p style="margin:0 0 24px">
+    <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/account"
+       style="display:inline-block;background:#006948;color:#ffffff;text-decoration:none;font-weight:600;padding:12px 24px;border-radius:8px">Confirm my email</a>
+  </p>
+  <p style="font-size:13px;color:#575e70;margin:0">If you didn't create a NEXORA account, you can ignore this email.</p>
+</div>

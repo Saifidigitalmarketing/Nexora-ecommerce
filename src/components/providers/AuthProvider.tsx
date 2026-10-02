@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getSupabaseBrowser } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import type { Profile } from "@/lib/types";
@@ -18,8 +18,11 @@ export function AuthProvider({ initialUserId, initialProfile, children }: { init
   const router = useRouter();
   const [userId, setUserId] = useState(initialUserId);
   const [profile, setProfile] = useState(initialProfile);
+  // user the server rendered for; a different session in the browser means the page is stale
+  const current = useRef(initialUserId);
 
   useEffect(() => {
+    current.current = initialUserId;
     setUserId(initialUserId);
     setProfile(initialProfile);
   }, [initialUserId, initialProfile]);
@@ -27,17 +30,26 @@ export function AuthProvider({ initialUserId, initialProfile, children }: { init
   useEffect(() => {
     if (!isSupabaseConfigured()) return;
     const supabase = getSupabaseBrowser();
+    const sync = (next: string | null) => {
+      if (next === current.current) return;
+      current.current = next;
+      setUserId(next);
+      if (!next) setProfile(null);
+      router.refresh(); // re-render server components (profile, protected pages) for the new session
+    };
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
-      const next = session?.user?.id ?? null;
-      // Login/signup forms navigate themselves; here we only mirror state.
-      if (event === "SIGNED_IN") setUserId(next);
-      if (event === "SIGNED_OUT") {
-        setUserId(null);
-        setProfile(null);
-        router.refresh();
-      }
+      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "INITIAL_SESSION") sync(session?.user?.id ?? null);
     });
-    return () => data.subscription.unsubscribe();
+    // The session lives in cookies, so a sign-in/out in another tab (e.g. the
+    // email confirmation link) is picked up when this tab becomes visible again.
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void supabase.auth.getSession().then(({ data: d }) => sync(d.session?.user?.id ?? null));
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      data.subscription.unsubscribe();
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [router]);
 
   const value = useMemo<AuthState>(
@@ -46,13 +58,21 @@ export function AuthProvider({ initialUserId, initialProfile, children }: { init
       profile,
       signOut: async () => {
         await getSupabaseBrowser().auth.signOut();
+        current.current = null;
         setUserId(null);
         setProfile(null);
-        router.push("/");
-        router.refresh();
+        // drop offline copies of pages rendered for this account (service worker page cache)
+        try {
+          const keys = await caches.keys();
+          await Promise.all(keys.filter((k) => k.endsWith("-pages")).map((k) => caches.delete(k)));
+        } catch {
+          // Cache Storage unavailable (private mode / old browser)
+        }
+        // full navigation clears the client router cache of signed-in pages
+        window.location.replace("/");
       },
     }),
-    [userId, profile, router],
+    [userId, profile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

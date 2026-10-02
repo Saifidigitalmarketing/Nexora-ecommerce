@@ -5,9 +5,14 @@ import { StackHeader } from "@/components/layout/StackHeader";
 import { Icon } from "@/components/ui/Icon";
 import { getPublicSetting } from "@/lib/catalog";
 import { formatDate } from "@/lib/format";
+import { pageMetadata } from "@/lib/seo";
 import { getSession, getSupabaseServer } from "@/lib/supabase/server";
 
-export const metadata: Metadata = { title: "Help & Support" };
+export const metadata: Metadata = pageMetadata({
+  title: "Help & Support",
+  description: "Get help with NEXORA orders, delivery, payments and returns, or contact our support team.",
+  path: "/help",
+});
 
 const FAQ = [
   { q: "How do I track my order?", a: "Go to Account → My Orders and open your order. You'll see every step from Order Placed to Delivered." },

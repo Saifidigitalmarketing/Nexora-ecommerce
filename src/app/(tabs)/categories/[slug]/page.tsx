@@ -7,13 +7,22 @@ import { SearchField } from "@/components/listing/SearchField";
 import { Icon } from "@/components/ui/Icon";
 import { getCategories } from "@/lib/catalog";
 import { cn } from "@/lib/format";
+import { pageMetadata } from "@/lib/seo";
 
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<RawParams> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const cat = (await getCategories()).find((c) => c.slug === slug);
-  return { title: cat?.name ?? "Category" };
+  const categories = await getCategories();
+  const cat = categories.find((c) => c.slug === slug);
+  if (!cat) return { title: "Category not found", robots: { index: false } };
+  const parent = cat.parent_id ? categories.find((c) => c.id === cat.parent_id) : null;
+  return pageMetadata({
+    title: cat.name,
+    description: `Shop ${cat.name}${parent ? ` in ${parent.name}` : ""} on NEXORA — authentic products with Cash on Delivery, Easypaisa and JazzCash across Pakistan.`,
+    path: `/categories/${cat.slug}`,
+    images: cat.image_url ? [{ url: cat.image_url, alt: cat.name }] : undefined,
+  });
 }
 
 export default async function CategoryPage({ params, searchParams }: Props) {

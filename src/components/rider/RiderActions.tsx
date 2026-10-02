@@ -24,7 +24,7 @@ export function RiderActions({ order }: { order: Pick<Order, "id" | "status" | "
 
   const run = async () => {
     if (action!.key === "delivered") {
-      const cod = order.payment_method === "cod" && order.payment_status !== "paid";
+      const cod = order.payment_method === "cod" && order.payment_status === "pending";
       if (!confirm(cod ? `Confirm you collected ${formatPKR(order.total)} in cash and delivered the order?` : "Confirm the order was delivered?")) return;
     }
     setBusy(true);

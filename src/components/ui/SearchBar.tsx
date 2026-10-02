@@ -12,7 +12,7 @@ type SpeechRecognitionLike = {
   stop: () => void;
   onresult: ((e: { results: { 0: { 0: { transcript: string } } } }) => void) | null;
   onend: (() => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((e: { error?: string }) => void) | null;
 };
 
 /** Stitch search pill: submit → /search, mic → Web Speech API voice search. */
@@ -42,7 +42,8 @@ export function SearchBar({ defaultValue = "", placeholder = "Search 200,000+ au
       return;
     }
     const rec = new Ctor();
-    rec.lang = "en-PK";
+    // en-IN is widely supported by Chrome's speech service and suits Pakistani English
+    rec.lang = "en-IN";
     rec.interimResults = false;
     rec.onresult = (e) => {
       const text = e.results[0][0].transcript;
@@ -50,9 +51,17 @@ export function SearchBar({ defaultValue = "", placeholder = "Search 200,000+ au
       go(text);
     };
     rec.onend = () => setListening(false);
-    rec.onerror = () => {
+    rec.onerror = (e) => {
       setListening(false);
-      toast("Couldn't hear that — please try again", "error");
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        toast("Allow microphone access in your browser to use voice search", "error");
+      } else if (e.error === "no-speech" || e.error === "aborted") {
+        toast("Didn't catch that — tap the mic and speak again", "info");
+      } else if (e.error === "network") {
+        toast("Voice search needs an internet connection", "error");
+      } else {
+        toast("Couldn't hear that — please try again", "error");
+      }
     };
     recRef.current = rec;
     setListening(true);
@@ -77,25 +86,16 @@ export function SearchBar({ defaultValue = "", placeholder = "Search 200,000+ au
         autoFocus={autoFocus}
         enterKeyHint="search"
         aria-label="Search products"
-        className="w-full h-12 pl-12 pr-20 bg-transparent rounded-full font-body-md text-body-md text-on-surface placeholder:text-secondary focus:outline-none"
+        className={`w-full h-12 pl-12 ${q ? "pr-20" : "pr-12"} bg-transparent rounded-full font-body-md text-body-md text-on-surface placeholder:text-secondary focus:outline-none`}
         placeholder={placeholder}
       />
       <div className="absolute right-2 flex items-center gap-1 pr-1">
+        {/* Visual (camera) search is hidden until an image-search service is added */}
         {q ? (
           <button type="button" onClick={() => setQ("")} aria-label="Clear search" className="w-8 h-8 flex items-center justify-center rounded-full text-secondary hover:text-on-surface">
             <Icon name="close" className="text-[18px]" />
           </button>
-        ) : (
-          <button
-            type="button"
-            title="Scan or search by image"
-            aria-label="Search by image"
-            onClick={() => toast("Visual search is coming soon", "info")}
-            className="w-8 h-8 flex items-center justify-center rounded-full text-secondary hover:text-primary transition-colors"
-          >
-            <Icon name="photo_camera" className="text-[19px]" />
-          </button>
-        )}
+        ) : null}
         <button
           type="button"
           title="Voice search"

@@ -237,7 +237,8 @@ do $$ begin
   perform public.rider_update_order((select id from t_order), 'on_the_way');
   perform public.rider_update_order((select id from t_order), 'delivered');
   assert (select status from public.orders) = 'delivered', 'not delivered';
-  assert (select payment_status from public.orders) = 'paid', 'COD not marked paid';
+  -- delivered ≠ COD received: cash is with the rider until NEXORA verifies it
+  assert (select payment_status from public.orders) = 'awaiting_verification', 'COD must be collected, not paid, on delivery';
 end $$;
 reset role;
 

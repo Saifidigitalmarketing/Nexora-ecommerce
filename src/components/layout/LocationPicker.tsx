@@ -27,12 +27,17 @@ export function LocationPicker({ variant = "header" }: { variant?: "header" | "c
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="flex items-center gap-1 pl-1 min-h-[44px]"
+          className="flex items-center gap-1 pl-1 min-h-[44px] min-w-0"
           aria-label={`Delivery location: ${location.city}. Change`}
         >
-          <Icon name="location_on" className="text-[18px] text-primary" />
-          <span className="font-label-md text-label-md text-on-surface truncate max-w-[120px]">{location.city}, PK</span>
-          <Icon name="expand_more" className="text-[16px] text-secondary" />
+          <Icon name="location_on" className="text-[18px] text-primary shrink-0" />
+          <span className="font-label-md text-label-md text-on-surface truncate min-w-0 max-w-[120px]">{location.city}
+            {/* very small phones: city name only, so it never collides with the header icons */}
+            <span className="hidden min-[360px]:inline">, PK</span>
+          </span>
+          <span className="hidden min-[360px]:flex shrink-0">
+            <Icon name="expand_more" className="text-[16px] text-secondary" />
+          </span>
         </button>
       )}
       <Sheet open={open} onClose={() => setOpen(false)} title="Deliver to">

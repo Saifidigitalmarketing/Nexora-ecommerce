@@ -20,17 +20,27 @@ Stitch **Concept 2 — Clean Minimal Marketplace** design.
    3. `supabase/migrations/20260930000003_rls.sql` — row level security policies
    4. `supabase/migrations/20260930000004_storage.sql` — `product-images` storage bucket
    5. `supabase/migrations/20261001000001_courier_settlement.sql` — couriers, COD and seller settlements
-   6. `supabase/seed.sql` — *optional* starter catalogue (categories, brands, products from the Stitch screens, delivery zones, 2 coupons)
+   6. `supabase/migrations/20261002000001_cod_payment_states.sql` — delivered ≠ COD received (COD payment states)
+   7. `supabase/migrations/20261003000001_order_shipment_sync.sql` — rider settlements, cancel, order ↔ shipment sync
+   8. `supabase/seed.sql` — *optional* starter catalogue (categories, brands, products from the Stitch screens, delivery zones, 2 coupons)
 
    Or with the Supabase CLI: `supabase link` then `supabase db push` and `psql … -f supabase/seed.sql`.
 
    Every script is idempotent (`if not exists`, `on conflict do nothing`) and never drops data.
    See [`docs/DATABASE.md`](docs/DATABASE.md) for what each table and policy does.
 
-3. **Authentication → URL Configuration:** set *Site URL* to your domain and add
-   `https://your-domain/auth/callback` to *Redirect URLs* (also `http://localhost:3000/auth/callback` for local dev).
-4. **Authentication → Providers → Email:** keep enabled. Decide whether "Confirm email" is on
-   (recommended in production; sign-up then shows a "check your email" screen).
+3. **Authentication → URL Configuration:** set *Site URL* to your domain (e.g.
+   `https://nexora-ecommerce-phi.vercel.app`) and add `https://your-domain/**` to *Redirect URLs*
+   (also `http://localhost:3000/**` for local dev).
+4. **Authentication → Providers → Email:** keep enabled with **Confirm email ON**.
+5. **Authentication → Email Templates:** paste `supabase/templates/confirm-signup.html` into
+   *Confirm signup* and `supabase/templates/reset-password.html` into *Reset password*. These links
+   (`/auth/confirm?token_hash=…`) work in whatever browser or app the email is opened in — the
+   default Supabase links only sign the user in when opened in the same browser they signed up in.
+   Without the templates the app still works: the user is told their email is confirmed and signs in.
+6. **Authentication → SMTP Settings:** set up a custom SMTP sender (e.g. Resend, Brevo, Zoho, SES).
+   Supabase's built-in sender is for testing only — it is heavily rate-limited and may only deliver
+   to your own team's addresses, so customers would not receive confirmation emails.
 
 ### 1.2 App
 
@@ -66,6 +76,8 @@ email and clicks **Make rider**. Riders open `/rider` and only ever see orders a
 - **Admin → Delivery Charges:** review the base charge and zones.
 - Replace `public/brand/nexora-logo.svg` / `nexora-mark.svg` with the final logo artwork and run
   `node scripts/generate-icons.mjs` to regenerate the PWA icons.
+- Social sharing image: `public/og/nexora-og.png` (regenerate with `node scripts/generate-og.mjs`).
+  Set `NEXT_PUBLIC_SITE_URL` to the live domain so Open Graph and canonical URLs are absolute.
 - Seed product images point at the Stitch image CDN; upload your own photos from Admin → Products.
 
 ---
@@ -91,7 +103,8 @@ src/
     (stack)/         pushed screens with back header: product, checkout, orders, wishlist, auth, help
     admin/           admin dashboard (role = admin)
     rider/           rider app (role = rider)
-    auth/callback    email confirmation / password recovery
+    auth/callback    email links with ?code= (PKCE, same browser)
+    auth/confirm     email links with ?token_hash= (any browser; see supabase/templates)
     api/payments/    webhook placeholder for future online gateways
     manifest.ts      PWA manifest
   components/        ui/ layout/ product/ listing/ pdp/ cart/ checkout/ account/ admin/ rider/ providers/
@@ -132,7 +145,8 @@ truth for the storefront quote, checkout and `place_order()`:
 ### Payments
 
 COD, Easypaisa, JazzCash and Bank Transfer work today (wallet/bank payments are verified by an
-admin using the Transaction ID). `src/lib/payments/index.ts` documents how to plug in an online
+admin using the Transaction ID). A delivered COD order is only *COD collected*; it becomes paid when
+NEXORA verifies the cash in Shipments & Settlements (see `docs/DATABASE.md`). `src/lib/payments/index.ts` documents how to plug in an online
 gateway (card / wallet APIs) via a server route + webhook.
 
 ### Courier, COD and seller settlement
@@ -141,7 +155,8 @@ Flow: customer → seller's items → courier → **customer pays COD to the cou
 NEXORA's account → admin verifies the COD received → NEXORA commission and courier deductions are
 taken → seller payable is credited → admin approves and pays the seller. Sellers never collect COD.
 
-- **Admin → Orders → (order) → Courier & COD:** book a shipment per seller (courier, tracking
+- **Admin → Orders → (order) → Courier & COD:** book a shipment per seller. Orders assigned to your own
+  riders get a **NEXORA Rider** shipment automatically; courier shipment status updates the order status (courier, tracking
   number, COD amount, courier charges, other deductions, status, delivery date).
 - **Admin → Shipments & Settlements:** verify COD (amount received, settlement date, reference),
   approve seller settlements, mark paid with a payment reference, settlement history, couriers,

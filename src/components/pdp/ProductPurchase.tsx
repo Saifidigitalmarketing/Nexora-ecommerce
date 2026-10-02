@@ -167,9 +167,19 @@ export function ProductPurchase({ product }: { product: ProductDetail }) {
       ) : null}
 
       {/* Quantity */}
-      <div className="flex items-center justify-between mt-space-md bg-surface-container-lowest p-space-md rounded-xl shadow-sm">
-        <span className="font-label-lg text-label-lg text-on-surface">Quantity</span>
-        <QuantityStepper value={qty} max={Math.max(1, Math.min(20, stock))} onChange={setQty} size="md" />
+      <div className="mt-space-md bg-surface-container-lowest p-space-md rounded-xl shadow-sm flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <span className="font-label-lg text-label-lg text-on-surface">Quantity</span>
+          <QuantityStepper value={qty} max={Math.max(1, Math.min(20, stock))} onChange={setQty} size="md" />
+        </div>
+        {qty > 1 ? (
+          <div className="flex items-baseline justify-between pt-2 border-t border-surface-container-high tabular" aria-live="polite">
+            <span className="font-body-md text-body-md text-secondary">
+              Total ({qty} × {formatPKR(price)})
+            </span>
+            <span className="font-price-md text-price-md text-on-surface">{formatPKR(price * qty)}</span>
+          </div>
+        ) : null}
       </div>
 
       <div className="mt-space-md">

@@ -9,7 +9,9 @@ Review the files, then run them in the Supabase SQL editor in this order:
 3. `supabase/migrations/20260930000003_rls.sql`
 4. `supabase/migrations/20260930000004_storage.sql`
 5. `supabase/migrations/20261001000001_courier_settlement.sql`
-6. `supabase/seed.sql` (optional starter data)
+6. `supabase/migrations/20261002000001_cod_payment_states.sql`
+7. `supabase/migrations/20261003000001_order_shipment_sync.sql`
+8. `supabase/seed.sql` (optional starter data)
 
 ## Tables
 
@@ -45,7 +47,7 @@ Review the files, then run them in the Supabase SQL editor in this order:
 | `place_order(...)` | signed-in users | Validates contact/address, re-prices every line from the DB, locks and reserves stock, applies coupon (row-locked) and delivery charge, creates order + items + payment + history + notification |
 | `cancel_my_order(order, reason)` | order owner | Only while *Order Placed / Confirmed*; returns stock |
 | `admin_update_order_status`, `admin_assign_rider`, `admin_set_payment_status`, `admin_set_user_role`, `admin_dashboard_stats` | admins (checked inside) | Order workflow, rider assignment, payment verification, role changes, dashboard numbers |
-| `rider_update_order(order, action)` | the assigned rider | `accept` → `picked_up` → `on_the_way` → `delivered`, one step at a time; COD marked paid on delivery |
+| `rider_update_order(order, action)` | the assigned rider | `accept` → `picked_up` → `on_the_way` → `delivered`, one step at a time; COD becomes *collected* (`awaiting_verification`) on delivery, never paid |
 | `calculate_delivery(province, city, area, subtotal)` | everyone | Delivery charge + ETA used by storefront, checkout and `place_order` |
 | `validate_coupon(code, subtotal)` | everyone | Coupon check and discount amount |
 
@@ -91,6 +93,39 @@ policies on shipments or settlements — every change goes through the admin fun
 The same migration also relies on a fix in `20260930000002_functions.sql`: `place_order()` no longer
 fails for orders without a coupon in a fresh database session. If you already ran that file, run it
 again (it only uses `create or replace`).
+
+## COD payment states (`20261002000001_cod_payment_states.sql`)
+
+"Delivered" never means NEXORA has the money. Only replaces functions and adds the `NEXORA Rider`
+courier row; no tables, columns, enums or policies change.
+
+| Stage | Where it is stored |
+| --- | --- |
+| COD Pending | order not delivered, `orders.payment_status = pending` |
+| COD Collected / Courier Settlement Pending | delivered (rider or courier holds the cash): `payment_status = awaiting_verification`, shipment `cod_settlement_status = pending` |
+| Received — not verified | `cod_settlement_status = received` |
+| COD Received by NEXORA | admin verified: `cod_settlement_status = verified`; when every COD shipment of the order is verified, `payment_status = paid` |
+| Seller Payable → Payout Pending → Seller Paid | `seller_settlements.status` = `available` → `approved` → `paid` |
+
+- Rider-delivered orders: record the rider handover in *Courier & COD* with the **NEXORA Rider** courier, then verify it like courier COD.
+- Prepaid orders (Easypaisa / JazzCash / bank) become seller payable only when the payment is verified **and** the shipment is delivered.
+- A COD verification can no longer be changed once the seller settlement is approved or paid.
+
+## Order ↔ shipment ↔ settlement sync (`20261003000001_order_shipment_sync.sql`)
+
+Only replaces functions and adds internal helpers; no tables, columns, enums or policies change.
+
+- **Rider orders:** assigning a rider books one `NEXORA Rider` shipment per seller (tracking number =
+  order number) and a pending seller settlement. Shipments are unique per order + seller and
+  settlements unique per shipment, so reassigning never duplicates them.
+- **Cancel:** admin or customer cancellation cancels the order's booked / in-transit shipments, so their
+  settlements become `cancelled` (and stay cancelled on recompute). Orders with a delivered shipment
+  can't be cancelled — mark the shipment Returned first. Shipments of a cancelled order can't be edited.
+- **Status sync:** rider picked up / on the way → shipments In Transit; rider or admin delivered →
+  open shipments Delivered. A courier shipment In Transit moves a Placed / Confirmed / Processing order
+  to On The Way; when every seller's shipment is Delivered the order becomes Delivered. COD is then
+  only *collected* — it becomes paid when an admin verifies it. Returned shipments never auto-cancel
+  an order (cancelling restocks items, so it stays an admin decision).
 
 ## Make yourself admin
 

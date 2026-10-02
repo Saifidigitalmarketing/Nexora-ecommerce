@@ -1,11 +1,16 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import Link from "next/link";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/Icon";
 import { SearchBar } from "@/components/ui/SearchBar";
 import { getCategories } from "@/lib/catalog";
 
-export const metadata: Metadata = { title: "Categories" };
+export const metadata: Metadata = pageMetadata({
+  title: "Categories",
+  description: "Browse every NEXORA category — electronics, fashion, beauty, home and pantry. Cash on Delivery across Pakistan.",
+  path: "/categories",
+});
 
 export default async function CategoriesPage() {
   const categories = await getCategories();

@@ -3,7 +3,7 @@ import { StatCard, Table, Td } from "@/components/admin/ui";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { cn, formatDate, formatPKR } from "@/lib/format";
 import {
-  COD_STATUS_LABEL,
+  codStageLabel,
   SETTLEMENT_STATUS_LABEL,
   SHIPMENT_STATUS_LABEL,
   settlementTone,
@@ -83,7 +83,7 @@ export default async function SellerHome({ searchParams }: { searchParams: Promi
                   <p>{r.shipment ? SHIPMENT_STATUS_LABEL[r.shipment.status] : "—"}</p>
                   {r.shipment?.delivered_at ? <p className="font-body-sm text-body-sm text-secondary">{formatDate(r.shipment.delivered_at)}</p> : null}
                 </Td>
-                <Td className="whitespace-nowrap">{r.shipment ? COD_STATUS_LABEL[r.shipment.cod_settlement_status] : "—"}</Td>
+                <Td className="whitespace-nowrap">{r.shipment ? codStageLabel(r.shipment) : "—"}</Td>
                 <Td className="tabular whitespace-nowrap">{formatPKR(r.gross_sales)}</Td>
                 <Td className="tabular whitespace-nowrap">- {formatPKR(r.courier_deductions)}</Td>
                 <Td className="tabular whitespace-nowrap">
