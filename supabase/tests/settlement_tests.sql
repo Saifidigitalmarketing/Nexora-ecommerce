@@ -569,7 +569,8 @@ begin
     'zero-subtotal delivery allocation does not reconcile';
 end $;
 reset role;
-\n\echo 'S13. verified shipments and available/finalized settlements are locked'
+
+\echo 'S13. verified shipments and available/finalized settlements are locked'
 set role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000ad', false);
 do $
