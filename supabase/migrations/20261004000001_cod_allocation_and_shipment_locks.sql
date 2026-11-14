@@ -343,19 +343,6 @@ begin
     raise exception 'Amounts cannot be negative' using errcode = '22023';
   end if;
 
-  if o.payment_method = 'cod' then
-    if exists (select 1 from public.order_items where order_id = p_order and vendor_id is null) then
-      raise exception 'Cannot allocate COD: one or more order items have no seller' using errcode = 'P0001';
-    end if;
-    expected_cod := public._seller_cod_allocation(p_order, p_vendor);
-    if round(coalesce(p_cod_amount, 0), 2) is distinct from expected_cod then
-      raise exception 'COD amount for this seller must be Rs. % (allocated from order total)', expected_cod
-        using errcode = '22023';
-    end if;
-  elsif coalesce(p_cod_amount, 0) <> 0 then
-    raise exception 'Prepaid shipments must have zero COD amount' using errcode = '22023';
-  end if;
-
   select * into cur from public.shipments
   where order_id = p_order and vendor_id = p_vendor
   for update;
@@ -368,6 +355,19 @@ begin
       raise exception 'Shipment is financially locked after COD verification or seller payable creation'
         using errcode = 'P0001';
     end if;
+  end if;
+
+  if o.payment_method = 'cod' then
+    if exists (select 1 from public.order_items where order_id = p_order and vendor_id is null) then
+      raise exception 'Cannot allocate COD: one or more order items have no seller' using errcode = 'P0001';
+    end if;
+    expected_cod := public._seller_cod_allocation(p_order, p_vendor);
+    if round(coalesce(p_cod_amount, 0), 2) is distinct from expected_cod then
+      raise exception 'COD amount for this seller must be Rs. % (allocated from order total)', expected_cod
+        using errcode = '22023';
+    end if;
+  elsif coalesce(p_cod_amount, 0) <> 0 then
+    raise exception 'Prepaid shipments must have zero COD amount' using errcode = '22023';
   end if;
 
   insert into public.shipments (
