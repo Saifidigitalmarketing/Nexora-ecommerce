@@ -102,8 +102,26 @@ function PartForm({
     delivered_at: toLocalInput(shipment?.delivered_at ?? null),
   });
   const [busy, setBusy] = useState(false);
+  const [correctionReason, setCorrectionReason] = useState("");
+  const canReopenCod = shipment?.cod_settlement_status === "verified" && settlement?.status === "available";
   const courier = couriers.find((c) => c.id === v.courier_id);
   const link = trackingUrl(courier, shipment?.tracking_number ?? null);
+
+  const reopenCodVerification = async () => {
+    if (!shipment || !correctionReason.trim()) return;
+    setBusy(true);
+    const { error } = await getSupabaseBrowser().rpc("admin_reopen_cod_verification", {
+      p_shipment: shipment.id,
+      p_reason: correctionReason.trim(),
+    });
+    setBusy(false);
+    if (error) toast(error.message, "error");
+    else {
+      toast("COD verification reopened and recorded in audit history");
+      setCorrectionReason("");
+      router.refresh();
+    }
+  };
 
   const save = async () => {
     setBusy(true);
@@ -165,7 +183,22 @@ function PartForm({
         <Input label="Courier charges (Rs.)" name={`charges_${part.vendorId}`} inputMode="decimal" disabled={locked} value={v.charges} onChange={(e) => setV({ ...v, charges: e.target.value.replace(/[^\d.]/g, "") })} />
         <Input label="Other courier deductions" optional name={`other_${part.vendorId}`} inputMode="decimal" disabled={locked} value={v.other} onChange={(e) => setV({ ...v, other: e.target.value.replace(/[^\d.]/g, "") })} />
       </div>
-      {locked ? <p className="font-body-sm text-body-sm text-secondary">Financial shipment details are locked. Use the audited COD correction workflow for an eligible verification correction.</p> : null}
+      {locked ? <p className="font-body-sm text-body-sm text-secondary">Financial shipment details are locked. Shipment details cannot be edited after verification.</p> : null}
+      {canReopenCod ? (
+        <div className="flex flex-col gap-2 rounded-lg border border-outline-variant p-3">
+          <p className="font-label-md text-label-md">Need to correct the COD verification?</p>
+          <Input
+            label="Correction reason (required)"
+            value={correctionReason}
+            onChange={(e) => setCorrectionReason(e.target.value)}
+            placeholder="e.g. Courier remittance amount mismatch"
+          />
+          <Button size="sm" variant="outline" disabled={!correctionReason.trim() || busy} loading={busy} onClick={() => void reopenCodVerification()}>
+            Reopen COD verification
+          </Button>
+          <p className="font-body-sm text-body-sm text-secondary">This moves the COD receipt back to Disputed and the seller settlement to Pending. The reason is saved in the audit log. Approved or paid settlements cannot be reopened.</p>
+        </div>
+      ) : null}
       <Button size="sm" disabled={locked} loading={busy} onClick={() => void save()}>
         {shipment ? "Update shipment" : "Book shipment"}
       </Button>
