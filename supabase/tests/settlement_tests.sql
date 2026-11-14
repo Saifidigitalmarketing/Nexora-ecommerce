@@ -578,6 +578,23 @@ begin
   assert (select status from public.seller_settlements where id = st) = 'available',
     'verified COD did not create available settlement';
 
+  -- Explicit audited correction is allowed before approval/payment only.
+  perform public.admin_reopen_cod_verification(sh, 'Courier bank statement mismatch');
+  assert (select cod_settlement_status from public.shipments where id = sh) = 'disputed',
+    'audited correction did not reopen COD verification';
+  assert (select status from public.seller_settlements where id = st) = 'pending',
+    'audited correction did not reverse available seller payable';
+  assert (select payment_status from public.orders where id = o) = 'awaiting_verification',
+    'audited correction did not reverse COD paid state';
+  assert (select count(*) from public.shipment_correction_audit
+          where shipment_id = sh and reason = 'Courier bank statement mismatch') = 1,
+    'COD correction audit row missing';
+
+  perform public.admin_verify_cod(sh,
+    (select cod_amount from public.shipments where id = sh), current_date, 'LOCK-TEST-REVERIFIED');
+  assert (select status from public.seller_settlements where id = st) = 'available',
+    'COD re-verification did not restore seller payable';
+
   begin
     update public.seller_settlements set seller_payable = seller_payable + 1 where id = st;
     raise exception 'available settlement amount changed' using errcode = '22000';
@@ -587,6 +604,15 @@ begin
   begin
     update public.seller_settlements set status = 'pending' where id = st;
     raise exception 'approved settlement reversed without correction workflow' using errcode = '22000';
+  exception when sqlstate 'P0001' then null; end;
+  perform public.admin_mark_settlement_paid(st, 'LOCK-TEST-PAID');
+  begin
+    update public.seller_settlements set status = 'available' where id = st;
+    raise exception 'paid settlement changed' using errcode = '22000';
+  exception when sqlstate 'P0001' then null; end;
+  begin
+    delete from public.seller_settlements where id = st;
+    raise exception 'paid settlement deleted' using errcode = '22000';
   exception when sqlstate 'P0001' then null; end;
 end $;
 reset role;
