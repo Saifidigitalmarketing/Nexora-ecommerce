@@ -22,7 +22,8 @@ Stitch **Concept 2 — Clean Minimal Marketplace** design.
    5. `supabase/migrations/20261001000001_courier_settlement.sql` — couriers, COD and seller settlements
    6. `supabase/migrations/20261002000001_cod_payment_states.sql` — delivered ≠ COD received (COD payment states)
    7. `supabase/migrations/20261003000001_order_shipment_sync.sql` — rider settlements, cancel, order ↔ shipment sync
-   8. `supabase/seed.sql` — *optional* starter catalogue (categories, brands, products from the Stitch screens, delivery zones, 2 coupons)
+   8. `supabase/migrations/20261004000001_cod_allocation_and_shipment_locks.sql` — proportional COD allocation, financial shipment locks and audited pre-payout COD correction
+   9. `supabase/seed.sql` — *optional* starter catalogue (categories, brands, products from the Stitch screens, delivery zones, 2 coupons)
 
    Or with the Supabase CLI: `supabase link` then `supabase db push` and `psql … -f supabase/seed.sql`.
 
@@ -164,7 +165,7 @@ taken → seller payable is credited → admin approves and pays the seller. Sel
 - **Seller (`/seller`):** read-only total sales, pending/available balance, commission, courier
   deductions, total paid and settlement history. Sellers cannot change any figure (RLS + RPC only).
 - Commission (percent or fixed, default + per seller) and courier charges are configured by the
-  admin — nothing is hard-coded. Figures are computed in the database and frozen once approved.
+  admin — nothing is hard-coded. Figures are computed in the database and frozen once COD is verified / seller payable becomes available. Shipment COD is allocated by seller item subtotal: order discount is subtracted and delivery charge added proportionally, with paisa rounding leftovers assigned by largest remainder (vendor UUID tie-break), so all seller COD amounts sum exactly to the customer's order total. An admin may reopen a verified COD receipt only while its settlement is Available; the reason and before/after state are written to `shipment_correction_audit`. Approved and paid settlements are immutable and require a separate accounting adjustment process.
 - Seller payable = seller's items total − courier deductions − NEXORA commission. Coupon discounts
   and the customer delivery fee are NEXORA's, not the seller's.
 - Courier APIs (TCS, Leopards, M&P, Trax…) are not integrated yet; `couriers.code` and
