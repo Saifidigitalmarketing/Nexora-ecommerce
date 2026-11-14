@@ -97,7 +97,8 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ i
             <Card title="Courier & COD">
               <ShipmentPanel
                 orderId={o.id}
-                orderTotal={Number(o.total)}
+                discountTotal={Number(o.discount_total)}
+                deliveryCharge={Number(o.delivery_charge)}
                 parts={parts}
                 shipments={(shipments ?? []) as Shipment[]}
                 settlements={(settlements ?? []) as SellerSettlement[]}
