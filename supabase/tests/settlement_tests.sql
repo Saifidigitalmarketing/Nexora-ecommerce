@@ -562,17 +562,17 @@ begin
   begin
     perform public.admin_save_shipment(o, v, (select id from public.couriers where code = 'tcs'),
       'CHANGED-TRACK', 'booked', 1, 0, 0);
-    raise exception 'admin_save_shipment changed verified shipment';
+    raise exception 'admin_save_shipment changed verified shipment' using errcode = '22000';
   exception when sqlstate 'P0001' then null; end;
 
   begin
     update public.shipments set status = 'booked', tracking_number = 'DIRECT-CHANGE' where id = sh;
-    raise exception 'direct update changed verified shipment';
+    raise exception 'direct update changed verified shipment' using errcode = '22000';
   exception when sqlstate 'P0001' then null; end;
 
   begin
     delete from public.shipments where id = sh;
-    raise exception 'delete removed verified shipment';
+    raise exception 'delete removed verified shipment' using errcode = '22000';
   exception when sqlstate 'P0001' then null; end;
 
   assert (select status from public.seller_settlements where id = st) = 'available',
@@ -580,20 +580,20 @@ begin
 
   begin
     update public.seller_settlements set seller_payable = seller_payable + 1 where id = st;
-    raise exception 'available settlement amount changed';
+    raise exception 'available settlement amount changed' using errcode = '22000';
   exception when sqlstate 'P0001' then null; end;
 
   perform public.admin_approve_settlement(st, 'Lock test approval');
   begin
     update public.seller_settlements set status = 'pending' where id = st;
-    raise exception 'approved settlement reversed without correction workflow';
+    raise exception 'approved settlement reversed without correction workflow' using errcode = '22000';
   exception when sqlstate 'P0001' then null; end;
 end $;
 reset role;
 
 \echo 'S14. pre-verification cancellation remains supported'
 set role authenticated;
-select set_config('request.jwt.claim.sub', '0000000000000000000000000000000b', false);
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
 do $
 declare r jsonb;
 begin
