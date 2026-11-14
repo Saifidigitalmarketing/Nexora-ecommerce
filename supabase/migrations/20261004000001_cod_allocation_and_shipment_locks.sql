@@ -183,7 +183,7 @@ begin
   select * into o from public.orders where id = s.order_id;
   select * into existing from public.seller_settlements where shipment_id = s.id for update;
 
-  if found and existing.status in ('available', 'approved', 'paid') then
+  if found and existing.status in ('available', 'approved', 'paid', 'on_hold') then
     return;
   end if;
 
@@ -316,7 +316,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if tg_op = 'DELETE' and old.status in ('available', 'approved', 'paid') then
+  if tg_op = 'DELETE' and old.status in ('available', 'approved', 'paid', 'on_hold') then
     raise exception 'Available/finalized seller settlements cannot be deleted' using errcode = 'P0001';
   end if;
   if tg_op = 'DELETE' then return old; end if;
@@ -325,7 +325,7 @@ begin
     raise exception 'Paid seller settlements are immutable' using errcode = 'P0001';
   end if;
 
-  if old.status in ('available', 'approved') then
+  if old.status in ('available', 'approved', 'on_hold') then
     if new.shipment_id is distinct from old.shipment_id
       or new.order_id is distinct from old.order_id
       or new.vendor_id is distinct from old.vendor_id
@@ -337,8 +337,11 @@ begin
       or new.seller_payable is distinct from old.seller_payable then
       raise exception 'Available/finalized seller settlement amounts are locked' using errcode = 'P0001';
     end if;
-    if old.status = 'approved' and new.status not in ('approved', 'paid') then
+    if old.status = 'approved' and new.status not in ('approved', 'paid', 'on_hold') then
       raise exception 'Approved settlement cannot be reversed without an audited correction workflow' using errcode = 'P0001';
+    end if;
+    if old.status = 'on_hold' and new.status not in ('on_hold', 'pending') then
+      raise exception 'On-hold settlement can only remain on hold or be released for recomputation' using errcode = 'P0001';
     end if;
     if old.status = 'available' and new.status not in ('available', 'approved', 'on_hold') then
       if not (new.status = 'pending' and exists (
