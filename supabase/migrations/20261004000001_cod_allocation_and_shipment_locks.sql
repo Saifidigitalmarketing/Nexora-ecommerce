@@ -250,12 +250,11 @@ begin
   where shipment_id = old.id;
 
   locked := old.cod_settlement_status = 'verified'
-    or settlement_state in ('available', 'approved', 'paid');
+    or settlement_state in ('available', 'approved', 'paid')
+    or exists (select 1 from public.shipment_correction_audit a where a.shipment_id = old.id);
 
   if locked then
     if tg_op = 'UPDATE'
-      and old.cod_settlement_status = 'verified'
-      and new.cod_settlement_status = 'disputed'
       and new.status is not distinct from old.status
       and new.courier_id is not distinct from old.courier_id
       and new.tracking_number is not distinct from old.tracking_number
@@ -263,16 +262,22 @@ begin
       and new.courier_charges is not distinct from old.courier_charges
       and new.other_deductions is not distinct from old.other_deductions
       and new.delivered_at is not distinct from old.delivered_at
-      and new.cod_received_amount is not distinct from old.cod_received_amount
-      and new.cod_settlement_reference is not distinct from old.cod_settlement_reference
-      and new.cod_verified_by is null
-      and new.cod_verified_at is null
       and exists (
         select 1 from public.shipment_correction_audit a
         where a.shipment_id = old.id
           and a.transaction_id = txid_current()
           and a.changed_by = auth.uid()
           and a.action = 'reopen_cod_verification'
+      ) and (
+        (old.cod_settlement_status = 'verified'
+          and new.cod_settlement_status = 'disputed'
+          and new.cod_received_amount is not distinct from old.cod_received_amount
+          and new.cod_settlement_reference is not distinct from old.cod_settlement_reference
+          and new.cod_verified_by is null
+          and new.cod_verified_at is null)
+        or
+        (old.cod_settlement_status in ('disputed', 'received')
+          and new.cod_settlement_status in ('received', 'verified'))
       ) then
       return new;
     end if;
@@ -399,7 +404,8 @@ begin
     from public.seller_settlements where shipment_id = cur.id;
 
     if cur.cod_settlement_status = 'verified'
-      or settlement_state in ('available', 'approved', 'paid') then
+      or settlement_state in ('available', 'approved', 'paid')
+      or exists (select 1 from public.shipment_correction_audit a where a.shipment_id = cur.id) then
       raise exception 'Shipment is financially locked after COD verification or seller payable creation'
         using errcode = 'P0001';
     end if;
