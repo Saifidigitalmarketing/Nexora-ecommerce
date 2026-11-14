@@ -192,6 +192,11 @@ using the same manifest.
 - `supabase/tests/rls_and_rpc_tests.sql` — 11 scenarios: anon access, role escalation, price
   tampering, stock reservation, coupons, cross-customer isolation, rider isolation, rider workflow,
   reviews, cancellation/restock.
+- `supabase/tests/settlement_tests.sql` — COD handover/verification, single- and multi-seller
+  shipment totals, discount/delivery allocation and paisa rounding, zero-subtotal allocation,
+  shipment/settlement locks, audited COD reopening, payout immutability and cancellation.
+- Run both SQL suites with `supabase/tests/run_local.sh` against a throwaway local Postgres
+  instance; these tests have not been executed in this change environment.
 - The app was exercised end-to-end (sign-up, cart, coupon, checkout, admin order handling,
   product creation, rider delivery, offline mode) against a local Supabase-compatible stack
   (Postgres + GoTrue + PostgREST) and checked at 360 / 768 / 1280 px widths.
