@@ -216,6 +216,22 @@ begin
 end $$;
 revoke execute on function public._recompute_settlement(uuid) from public, anon, authenticated;
 
+-- Append-only audit trail for the one supported correction: reopening a COD
+-- verification before seller approval/payment. Paid/approved payouts need a
+-- separate accounting adjustment process and cannot be reversed here.
+create table if not exists public.shipment_correction_audit (
+  id bigserial primary key,
+  shipment_id uuid not null references public.shipments(id),
+  transaction_id bigint not null,
+  action text not null check (action = 'reopen_cod_verification'),
+  reason text not null,
+  before_state jsonb not null,
+  after_state jsonb not null,
+  changed_by uuid not null references public.profiles(id),
+  created_at timestamptz not null default now()
+);
+revoke all on public.shipment_correction_audit from public, anon, authenticated;
+
 -- Database-level guard: no UPDATE/DELETE of a verified shipment or a shipment
 -- whose seller settlement has become available/approved/paid. This applies to
 -- direct SQL and every RPC, not just the admin UI.
@@ -237,6 +253,25 @@ begin
     or settlement_state in ('available', 'approved', 'paid');
 
   if locked then
+    if tg_op = 'UPDATE'
+      and old.cod_settlement_status = 'verified'
+      and new.cod_settlement_status = 'disputed'
+      and new.status is not distinct from old.status
+      and new.courier_id is not distinct from old.courier_id
+      and new.tracking_number is not distinct from old.tracking_number
+      and new.cod_amount is not distinct from old.cod_amount
+      and new.courier_charges is not distinct from old.courier_charges
+      and new.other_deductions is not distinct from old.other_deductions
+      and new.delivered_at is not distinct from old.delivered_at
+      and exists (
+        select 1 from public.shipment_correction_audit a
+        where a.shipment_id = old.id
+          and a.transaction_id = txid_current()
+          and a.changed_by = auth.uid()
+          and a.action = 'reopen_cod_verification'
+      ) then
+      return new;
+    end if;
     raise exception 'Shipment is financially locked after COD verification or seller payable creation; use an audited correction workflow'
       using errcode = 'P0001';
   end if;
@@ -286,7 +321,16 @@ begin
       raise exception 'Approved settlement cannot be reversed without an audited correction workflow' using errcode = 'P0001';
     end if;
     if old.status = 'available' and new.status not in ('available', 'approved', 'on_hold') then
-      raise exception 'Available settlement can only be approved or placed on hold' using errcode = 'P0001';
+      if not (new.status = 'pending' and exists (
+        select 1 from public.shipment_correction_audit a
+        where a.shipment_id = old.shipment_id
+          and a.transaction_id = txid_current()
+          and a.changed_by = auth.uid()
+          and a.action = 'reopen_cod_verification'
+      )) then
+        raise exception 'Available settlement can only be approved or placed on hold; use an audited COD correction'
+          using errcode = 'P0001';
+      end if;
     end if;
   end if;
   return new;
@@ -400,3 +444,79 @@ begin
   perform public._sync_order_from_shipments(p_order);
   return sid;
 end $$;
+
+
+-- Audited COD correction: reopen a verified receipt only while the related
+-- seller settlement is Available (never Approved/Paid). The shipment stays
+-- delivered; only the COD verification is changed to Disputed. This reverses
+-- the order's paid state and the seller payable, and records before/after data.
+create or replace function public.admin_reopen_cod_verification(
+  p_shipment uuid,
+  p_reason text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  s public.shipments;
+  st public.seller_settlements;
+begin
+  if not public.is_admin() then
+    raise exception 'Not authorised' using errcode = '42501';
+  end if;
+  if nullif(trim(p_reason), '') is null then
+    raise exception 'A correction reason is required' using errcode = '22023';
+  end if;
+
+  select * into s from public.shipments where id = p_shipment for update;
+  if not found then raise exception 'Shipment not found' using errcode = 'P0002'; end if;
+  select * into st from public.seller_settlements where shipment_id = s.id for update;
+  if not found or st.status <> 'available' then
+    raise exception 'Only an Available seller settlement can have COD verification reopened; Approved/Paid settlements are immutable'
+      using errcode = 'P0001';
+  end if;
+  if s.cod_settlement_status <> 'verified' then
+    raise exception 'Only a verified COD shipment can be corrected' using errcode = 'P0001';
+  end if;
+
+  insert into public.shipment_correction_audit (
+    shipment_id, transaction_id, action, reason, before_state, after_state, changed_by
+  )
+  values (
+    s.id, txid_current(), 'reopen_cod_verification', trim(p_reason),
+    jsonb_build_object(
+      'cod_settlement_status', s.cod_settlement_status,
+      'cod_received_amount', s.cod_received_amount,
+      'cod_settlement_reference', s.cod_settlement_reference,
+      'cod_verified_by', s.cod_verified_by,
+      'cod_verified_at', s.cod_verified_at,
+      'seller_settlement_status', st.status,
+      'seller_payable', st.seller_payable
+    ),
+    jsonb_build_object(
+      'cod_settlement_status', 'disputed',
+      'seller_settlement_status', 'pending'
+    ),
+    auth.uid()
+  );
+
+  update public.shipments
+  set cod_settlement_status = 'disputed',
+      cod_verified_by = null,
+      cod_verified_at = null
+  where id = s.id;
+
+  update public.seller_settlements
+  set status = 'pending',
+      approved_by = null,
+      approved_at = null,
+      notes = concat_ws(E'\\n', nullif(notes, ''), 'COD verification reopened: ' || trim(p_reason))
+  where id = st.id;
+
+  perform public._recompute_settlement(s.id);
+  perform public._sync_cod_payment(s.order_id);
+end $$;
+revoke execute on function public.admin_reopen_cod_verification(uuid, text) from public, anon;
+grant execute on function public.admin_reopen_cod_verification(uuid, text) to authenticated;
