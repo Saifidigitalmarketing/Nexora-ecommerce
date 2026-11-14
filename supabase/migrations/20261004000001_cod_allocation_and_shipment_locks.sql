@@ -58,7 +58,7 @@ language sql
 stable
 security definer
 set search_path = public
-as $
+as $$
   select coalesce(sum(oi.line_total), 0)
     - public._allocated_order_component(p_order, p_vendor, o.discount_total)
     + public._allocated_order_component(p_order, p_vendor, o.delivery_charge)
@@ -66,7 +66,7 @@ as $
   left join public.order_items oi on oi.order_id = o.id and oi.vendor_id = p_vendor
   where o.id = p_order
   group by o.discount_total, o.delivery_charge;
-$;
+$$;
 revoke all on function public._seller_cod_allocation(uuid, uuid) from public, anon, authenticated;
 
 create or replace function public._ensure_rider_shipments(p_order uuid)
