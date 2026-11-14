@@ -534,7 +534,42 @@ begin
 end $;
 reset role;
 
-\echo 'S13. verified shipments and available/finalized settlements are locked'
+
+\echo 'S12b. zero-subtotal COD orders allocate delivery without division by zero'
+create temp table t_zero_prices as
+select id, price from public.products
+where slug in ('anker-nano-30w-charger', 'sapphire-egyptian-cotton-kurta-charcoal');
+update public.products set price = 0
+where slug in ('anker-nano-30w-charger', 'sapphire-egyptian-cotton-kurta-charcoal');
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
+do $
+declare r jsonb;
+begin
+  r := public.place_order(jsonb_build_array(
+      jsonb_build_object('product_id', (select id from public.products where slug = 'anker-nano-30w-charger'), 'quantity', 1),
+      jsonb_build_object('product_id', (select id from public.products where slug = 'sapphire-egyptian-cotton-kurta-charcoal'), 'quantity', 1)),
+    '{"full_name": "Sara Ahmed", "phone": "03011234567"}',
+    '{"province": "Punjab", "city": "Lahore", "area": "Gulberg", "address_line": "House 1, Main Blvd"}', 'cod');
+  insert into t_9 values ('zero_allocation', (r ->> 'order_id')::uuid);
+end $;
+reset role;
+update public.products p set price = z.price
+from t_zero_prices z where p.id = z.id;
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000ad', false);
+do $
+declare o uuid := (select id from t_9 where k = 'zero_allocation');
+begin
+  perform public.admin_assign_rider(o, '00000000-0000-0000-0000-0000000000e1');
+  assert (select subtotal from public.orders where id = o) = 0,
+    'zero-value fixture subtotal is not zero';
+  assert (select sum(cod_amount) from public.shipments where order_id = o)
+    = (select total from public.orders where id = o),
+    'zero-subtotal delivery allocation does not reconcile';
+end $;
+reset role;
+\n\echo 'S13. verified shipments and available/finalized settlements are locked'
 set role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000ad', false);
 do $
