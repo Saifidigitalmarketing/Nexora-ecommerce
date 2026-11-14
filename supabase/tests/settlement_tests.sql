@@ -58,7 +58,7 @@ begin
   perform public.admin_save_shipment((select id from t_s), (select id from public.vendors where slug = 'sapphire-official'),
     tcs, 'TCS123456', 'booked', public._seller_cod_allocation((select id from t_s), (select id from public.vendors where slug = 'sapphire-official')), 250, 0);
   perform public.admin_save_shipment((select id from t_s), (select id from public.vendors where slug = 'anker-official'),
-    tcs, 'TCS123457', 'booked', public._seller_cod_allocation(o, (select id from public.vendors where slug = 'anker-official')), 250, 50);
+    tcs, 'TCS123457', 'booked', public._seller_cod_allocation((select id from t_s), (select id from public.vendors where slug = 'anker-official')), 250, 50);
   assert (select count(*) from public.seller_settlements where order_id = (select id from t_s) and status = 'pending') = 2, 'settlements not pending';
 end $$;
 do $$ begin
