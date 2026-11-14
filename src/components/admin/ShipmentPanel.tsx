@@ -91,7 +91,8 @@ function PartForm({
     shipment?.cod_settlement_status === "disputed" ||
     settlement?.status === "available" ||
     settlement?.status === "approved" ||
-    settlement?.status === "paid";
+    settlement?.status === "paid" ||
+    settlement?.status === "on_hold";
   const [v, setV] = useState({
     courier_id: shipment?.courier_id ?? couriers[0]?.id ?? "",
     tracking: shipment?.tracking_number ?? "",
