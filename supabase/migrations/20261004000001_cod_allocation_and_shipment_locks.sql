@@ -236,6 +236,12 @@ create table if not exists public.shipment_correction_audit (
   created_at timestamptz not null default now()
 );
 revoke all on public.shipment_correction_audit from public, anon, authenticated;
+alter table public.shipment_correction_audit enable row level security;
+grant select on public.shipment_correction_audit to authenticated;
+drop policy if exists shipment_correction_audit_admin_read on public.shipment_correction_audit;
+create policy shipment_correction_audit_admin_read
+  on public.shipment_correction_audit for select to authenticated
+  using (public.is_admin());
 
 -- Database-level guard: no UPDATE/DELETE of a verified shipment or a shipment
 -- whose seller settlement has become available/approved/paid. This applies to
