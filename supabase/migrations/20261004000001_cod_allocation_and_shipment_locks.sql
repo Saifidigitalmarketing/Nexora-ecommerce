@@ -273,22 +273,28 @@ begin
       and new.courier_charges is not distinct from old.courier_charges
       and new.other_deductions is not distinct from old.other_deductions
       and new.delivered_at is not distinct from old.delivered_at
-      and exists (
-        select 1 from public.shipment_correction_audit a
-        where a.shipment_id = old.id
-          and a.transaction_id = txid_current()
-          and a.changed_by = auth.uid()
-          and a.action = 'reopen_cod_verification'
-      ) and (
+      and (
         (old.cod_settlement_status = 'verified'
           and new.cod_settlement_status = 'disputed'
           and new.cod_received_amount is not distinct from old.cod_received_amount
           and new.cod_settlement_reference is not distinct from old.cod_settlement_reference
           and new.cod_verified_by is null
-          and new.cod_verified_at is null)
+          and new.cod_verified_at is null
+          and exists (
+            select 1 from public.shipment_correction_audit a
+            where a.shipment_id = old.id
+              and a.transaction_id = txid_current()
+              and a.changed_by = auth.uid()
+              and a.action = 'reopen_cod_verification'
+          ))
         or
         (old.cod_settlement_status in ('disputed', 'received')
-          and new.cod_settlement_status in ('received', 'verified'))
+          and new.cod_settlement_status in ('received', 'verified')
+          and exists (
+            select 1 from public.shipment_correction_audit a
+            where a.shipment_id = old.id
+              and a.action = 'reopen_cod_verification'
+          ))
       ) then
       return new;
     end if;
