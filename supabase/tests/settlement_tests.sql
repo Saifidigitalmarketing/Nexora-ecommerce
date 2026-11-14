@@ -494,7 +494,7 @@ reset role;
 \echo 'S12. COD allocation reconciles discounts, delivery and paisa rounding'
 set role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
-do $
+do $$
 declare r jsonb;
 begin
   r := public.place_order(jsonb_build_array(
@@ -503,7 +503,7 @@ begin
     '{"full_name": "Sara Ahmed", "phone": "03011234567"}',
     '{"province": "Punjab", "city": "Lahore", "area": "Gulberg", "address_line": "House 1, Main Blvd"}', 'cod');
   insert into t_9 values ('allocation', (r ->> 'order_id')::uuid);
-end $;
+end $$;
 reset role;
 -- Simulate an order snapshot with a non-even discount and delivery amount;
 -- this tests the allocator independently of coupon configuration.
@@ -514,7 +514,7 @@ set discount_total = 1.01,
 where id = (select id from t_9 where k = 'allocation');
 set role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000ad', false);
-do $
+do $$
 declare
   o uuid := (select id from t_9 where k = 'allocation');
   expected numeric;
@@ -531,7 +531,7 @@ begin
   assert public._allocated_order_component(o,
     (select vendor_id from public.order_items where order_id = o order by vendor_id limit 1), 0) = 0,
     'zero amount allocation is not zero';
-end $;
+end $$;
 reset role;
 
 
@@ -543,7 +543,7 @@ update public.products set price = 0
 where slug in ('anker-nano-30w-charger', 'sapphire-egyptian-cotton-kurta-charcoal');
 set role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
-do $
+do $$
 declare r jsonb;
 begin
   r := public.place_order(jsonb_build_array(
@@ -552,13 +552,13 @@ begin
     '{"full_name": "Sara Ahmed", "phone": "03011234567"}',
     '{"province": "Punjab", "city": "Lahore", "area": "Gulberg", "address_line": "House 1, Main Blvd"}', 'cod');
   insert into t_9 values ('zero_allocation', (r ->> 'order_id')::uuid);
-end $;
+end $$;
 reset role;
 update public.products p set price = z.price
 from t_zero_prices z where p.id = z.id;
 set role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000ad', false);
-do $
+do $$
 declare o uuid := (select id from t_9 where k = 'zero_allocation');
 begin
   perform public.admin_assign_rider(o, '00000000-0000-0000-0000-0000000000e1');
@@ -567,13 +567,13 @@ begin
   assert (select sum(cod_amount) from public.shipments where order_id = o)
     = (select total from public.orders where id = o),
     'zero-subtotal delivery allocation does not reconcile';
-end $;
+end $$;
 reset role;
 
 \echo 'S13. verified shipments and available/finalized settlements are locked'
 set role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000ad', false);
-do $
+do $$
 declare
   o uuid := (select id from t_9 where k = 'allocation');
   sh uuid;
@@ -650,13 +650,13 @@ begin
     delete from public.seller_settlements where id = st;
     raise exception 'paid settlement deleted' using errcode = '22000';
   exception when sqlstate 'P0001' then null; end;
-end $;
+end $$;
 reset role;
 
 \echo 'S14. pre-verification cancellation remains supported'
 set role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
-do $
+do $$
 declare r jsonb;
 begin
   r := public.place_order(jsonb_build_array(
@@ -664,9 +664,9 @@ begin
     '{"full_name": "Sara Ahmed", "phone": "03011234567"}',
     '{"province": "Punjab", "city": "Lahore", "area": "Gulberg", "address_line": "House 1, Main Blvd"}', 'cod');
   insert into t_9 values ('safe_cancel', (r ->> 'order_id')::uuid);
-end $;
+end $$;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000ad', false);
-do $
+do $$
 declare o uuid := (select id from t_9 where k = 'safe_cancel');
 begin
   perform public.admin_assign_rider(o, '00000000-0000-0000-0000-0000000000e1');
@@ -675,7 +675,7 @@ begin
     'legitimate open-shipment cancellation failed';
   assert (select status from public.seller_settlements where order_id = o) = 'cancelled',
     'open seller settlement was not cancelled';
-end $;
+end $$;
 reset role;
 
 \echo 'ALL EXTENDED SETTLEMENT TESTS PASSED'
