@@ -56,13 +56,13 @@ do $$
 declare tcs uuid := (select id from public.couriers where code = 'tcs');
 begin
   perform public.admin_save_shipment((select id from t_s), (select id from public.vendors where slug = 'sapphire-official'),
-    tcs, 'TCS123456', 'booked', 5990 + 150, 250, 0);
+    tcs, 'TCS123456', 'booked', public._seller_cod_allocation((select id from t_s), (select id from public.vendors where slug = 'sapphire-official')), 250, 0);
   perform public.admin_save_shipment((select id from t_s), (select id from public.vendors where slug = 'anker-official'),
-    tcs, 'TCS123457', 'booked', 4800, 250, 50);
+    tcs, 'TCS123457', 'booked', public._seller_cod_allocation((select id from t_s), (select id from public.vendors where slug = 'anker-official')), 250, 50);
   assert (select count(*) from public.seller_settlements where order_id = (select id from t_s) and status = 'pending') = 2, 'settlements not pending';
 end $$;
 do $$ begin
-  perform public.admin_verify_cod((select id from public.shipments where tracking_number = 'TCS123456'), 6140, current_date, 'TCS-REMIT-1');
+  perform public.admin_verify_cod((select id from public.shipments where tracking_number = 'TCS123456'), public._seller_cod_allocation((select id from t_s), (select id from public.vendors where slug = 'sapphire-official')), current_date, 'TCS-REMIT-1');
   raise exception 'verified COD before delivery';
 exception when sqlstate 'P0001' then null; end $$;
 do $$ begin
@@ -115,8 +115,8 @@ declare
   st uuid;
 begin
   perform public.admin_save_shipment((select id from t_s), (select id from public.vendors where slug = 'sapphire-official'),
-    (select id from public.couriers where code = 'tcs'), 'TCS123456', 'delivered', 6140, 250, 0);
-  perform public.admin_verify_cod(sh, 5890, current_date, 'TCS-REMIT-1');
+    (select id from public.couriers where code = 'tcs'), 'TCS123456', 'delivered', public._seller_cod_allocation((select id from t_s), (select id from public.vendors where slug = 'sapphire-official')), 250, 0);
+  perform public.admin_verify_cod(sh, (select cod_amount - courier_charges from public.shipments where id = sh), current_date, 'TCS-REMIT-1');
   select id into st from public.seller_settlements where shipment_id = sh;
   assert (select status from public.seller_settlements where id = st) = 'available', 'not available after COD verify';
   -- amounts are locked once COD is verified
@@ -198,7 +198,7 @@ begin
   assert (select status from public.payments where order_id = o) = 'awaiting_verification', 'payment row paid on delivery';
   assert (select meta ->> 'collected_by' from public.payments where order_id = o) = 'rider', 'collection not recorded';
   sh := public.admin_save_shipment(o, (select id from public.vendors where slug = 'anker-official'),
-    (select id from public.couriers where code = 'nexora_rider'), 'RIDER-1', 'delivered', 5000, 0, 0);
+    (select id from public.couriers where code = 'nexora_rider'), 'RIDER-1', 'delivered', public._seller_cod_allocation(o, (select id from public.vendors where slug = 'anker-official')), 0, 0);
   assert (select status from public.seller_settlements where shipment_id = sh) = 'pending', 'payable before cash handover verified';
   perform public.admin_verify_cod(sh, 5000, current_date, 'HANDOVER-1', 'received');
   assert (select status from public.seller_settlements where shipment_id = sh) = 'pending', 'payable on unverified handover';
@@ -227,12 +227,12 @@ declare
 begin
   perform public.admin_update_order_status(o, 'confirmed', null);
   sh := public.admin_save_shipment(o, (select id from public.vendors where slug = 'anker-official'),
-    (select id from public.couriers where code = 'tcs'), 'TCS-S8', 'delivered', 5000, 250, 0);
+    (select id from public.couriers where code = 'tcs'), 'TCS-S8', 'delivered', public._seller_cod_allocation(o, (select id from public.vendors where slug = 'anker-official')), 250, 0);
   -- the delivered courier shipment delivers the order (no manual step needed)
   assert (select status from public.orders where id = o) = 'delivered', 'courier delivery did not deliver the order';
   assert (select payment_status from public.orders where id = o) = 'awaiting_verification', 'courier delivery marked COD paid';
   assert (select status from public.seller_settlements where shipment_id = sh) = 'pending', 'payable before courier remittance';
-  perform public.admin_verify_cod(sh, 4750, current_date, 'TCS-REMIT-S8');
+  perform public.admin_verify_cod(sh, (select cod_amount - courier_charges from public.shipments where id = sh), current_date, 'TCS-REMIT-S8');
   assert (select payment_status from public.orders where id = o) = 'paid', 'courier COD verified but order not paid';
   assert (select status from public.seller_settlements where shipment_id = sh) = 'available', 'not payable after verify';
 end $$;
@@ -367,7 +367,7 @@ declare
   st uuid;
 begin
   -- admin cancels a courier order whose shipment is in transit
-  sh := public.admin_save_shipment(o, anker, tcs, 'TCS-S10', 'in_transit', 5000, 250, 0);
+  sh := public.admin_save_shipment(o, anker, tcs, 'TCS-S10', 'in_transit', public._seller_cod_allocation(o, (select id from public.vendors where slug = 'anker-official')), 250, 0);
   perform public.admin_update_order_status(o, 'cancelled', 'Customer refused');
   assert (select status from public.shipments where id = sh) = 'cancelled', 'shipment not cancelled';
   assert (select status from public.seller_settlements where shipment_id = sh) = 'cancelled', 'settlement not cancelled';
@@ -377,7 +377,7 @@ begin
     raise exception 'approved a cancelled settlement';
   exception when sqlstate 'P0001' then null; end;
   begin
-    perform public.admin_save_shipment(o, anker, tcs, 'TCS-S10', 'delivered', 5000, 250, 0);
+    perform public.admin_save_shipment(o, anker, tcs, 'TCS-S10', 'delivered', public._seller_cod_allocation(o, (select id from public.vendors where slug = 'anker-official')), 250, 0);
     raise exception 'revived shipment of cancelled order';
   exception when sqlstate 'P0001' then null; end;
   assert (select status from public.seller_settlements where shipment_id = sh) = 'cancelled', 'cancelled settlement revived';
@@ -392,7 +392,7 @@ begin
 
   -- an order with a delivered shipment cannot be cancelled (mark it returned first)
   perform public.admin_update_order_status(oc, 'confirmed', null);
-  sh := public.admin_save_shipment(oc, anker, tcs, 'TCS-S10C', 'booked', 5000, 250, 0);
+  sh := public.admin_save_shipment(oc, anker, tcs, 'TCS-S10C', 'booked', public._seller_cod_allocation(oc, (select id from public.vendors where slug = 'anker-official')), 250, 0);
 end $$;
 -- customer cancels their confirmed order that already has a booked courier shipment
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
@@ -426,7 +426,7 @@ declare
   tcs uuid := (select id from public.couriers where code = 'tcs');
   sh uuid;
 begin
-  sh := public.admin_save_shipment(o, (select id from public.vendors where slug = 'anker-official'), tcs, 'TCS-S10D', 'delivered', 4800, 250, 0);
+  sh := public.admin_save_shipment(o, (select id from public.vendors where slug = 'anker-official'), tcs, 'TCS-S10D', 'delivered', public._seller_cod_allocation((select id from t_s), (select id from public.vendors where slug = 'anker-official')), 250, 0);
   -- only one of two sellers delivered: the order is on the way, not delivered
   assert (select status from public.orders where id = o) = 'on_the_way', 'order delivered with a seller not shipped';
   begin
@@ -436,7 +436,7 @@ begin
   assert (select status from public.orders where id = o) <> 'cancelled', 'order cancelled despite delivered shipment';
   assert (select status from public.seller_settlements where shipment_id = sh) = 'pending', 'delivered settlement touched';
   -- returned first, then the cancel goes through and closes everything
-  perform public.admin_save_shipment(o, (select id from public.vendors where slug = 'anker-official'), tcs, 'TCS-S10D', 'returned', 4800, 250, 0);
+  perform public.admin_save_shipment(o, (select id from public.vendors where slug = 'anker-official'), tcs, 'TCS-S10D', 'returned', public._seller_cod_allocation((select id from t_s), (select id from public.vendors where slug = 'anker-official')), 250, 0);
   perform public.admin_update_order_status(o, 'cancelled', 'Returned to seller');
   assert (select count(*) from public.seller_settlements where order_id = o and status <> 'cancelled') = 0, 'settlements open after cancel';
 end $$;
@@ -467,21 +467,21 @@ declare
   sh uuid;
 begin
   perform public.admin_update_order_status(o, 'confirmed', null);
-  perform public.admin_save_shipment(o, anker, tcs, 'TCS-S11A', 'booked', 4800, 250, 0);
-  perform public.admin_save_shipment(o, sapph, tcs, 'TCS-S11S', 'booked', 5990, 250, 0);
+  perform public.admin_save_shipment(o, anker, tcs, 'TCS-S11A', 'booked', public._seller_cod_allocation((select id from t_s), (select id from public.vendors where slug = 'anker-official')), 250, 0);
+  perform public.admin_save_shipment(o, sapph, tcs, 'TCS-S11S', 'booked', public._seller_cod_allocation(o, (select id from public.vendors where slug = 'sapphire-official')), 250, 0);
   assert (select status from public.orders where id = o) = 'confirmed', 'booking changed order status';
-  perform public.admin_save_shipment(o, anker, tcs, 'TCS-S11A', 'in_transit', 4800, 250, 0);
+  perform public.admin_save_shipment(o, anker, tcs, 'TCS-S11A', 'in_transit', public._seller_cod_allocation((select id from t_s), (select id from public.vendors where slug = 'anker-official')), 250, 0);
   assert (select status from public.orders where id = o) = 'on_the_way', 'in-transit shipment did not move order on the way';
-  perform public.admin_save_shipment(o, anker, tcs, 'TCS-S11A', 'delivered', 4800, 250, 0);
+  perform public.admin_save_shipment(o, anker, tcs, 'TCS-S11A', 'delivered', public._seller_cod_allocation((select id from t_s), (select id from public.vendors where slug = 'anker-official')), 250, 0);
   assert (select status from public.orders where id = o) = 'on_the_way', 'order delivered while one seller still in transit';
   assert (select payment_status from public.orders where id = o) = 'pending', 'COD collected before order delivered';
-  perform public.admin_save_shipment(o, sapph, tcs, 'TCS-S11S', 'delivered', 5990, 250, 0);
+  perform public.admin_save_shipment(o, sapph, tcs, 'TCS-S11S', 'delivered', public._seller_cod_allocation(o, (select id from public.vendors where slug = 'sapphire-official')), 250, 0);
   assert (select status from public.orders where id = o) = 'delivered', 'order not delivered when all shipments delivered';
   assert (select payment_status from public.orders where id = o) = 'awaiting_verification', 'COD must be collected, not paid';
   assert (select count(*) from public.order_status_history where order_id = o and status = 'delivered') = 1, 'delivered logged more than once';
   assert (select count(*) from public.seller_settlements where order_id = o and status = 'pending') = 2, 'payable before COD verified';
   -- admin "Mark delivered" delivers the order's open courier shipment
-  sh := public.admin_save_shipment(o2, anker, tcs, 'TCS-S11B', 'in_transit', 5000, 250, 0);
+  sh := public.admin_save_shipment(o2, anker, tcs, 'TCS-S11B', 'in_transit', public._seller_cod_allocation(o, (select id from public.vendors where slug = 'anker-official')), 250, 0);
   perform public.admin_update_order_status(o2, 'delivered', 'Delivered');
   assert (select status from public.shipments where id = sh) = 'delivered', 'admin delivery did not deliver shipment';
   assert (select payment_status from public.orders where id = o2) = 'awaiting_verification', 'admin delivery marked COD paid';
