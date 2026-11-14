@@ -630,6 +630,15 @@ begin
           where shipment_id = sh and reason = 'Courier bank statement mismatch') = 1,
     'COD correction audit row missing';
 
+end $$;
+do $$
+declare
+  o uuid := (select id from t_9 where k = 'allocation');
+  sh uuid := (select id from public.shipments where order_id = (select id from t_9 where k = 'allocation') limit 1);
+  st uuid := (select id from public.seller_settlements where shipment_id =
+    (select id from public.shipments where order_id = (select id from t_9 where k = 'allocation') limit 1));
+begin
+  -- This runs in a separate transaction from the audited reopen above.
   perform public.admin_verify_cod(sh,
     (select cod_amount from public.shipments where id = sh), current_date, 'LOCK-TEST-REVERIFIED');
   assert (select status from public.seller_settlements where id = st) = 'available',
