@@ -142,9 +142,14 @@ begin
     end if;
   end loop;
 
-  if o.payment_method = 'cod' and allocated_total <> o.total then
-    raise exception 'COD allocation mismatch: seller shipments total %, order total %',
-      allocated_total, o.total using errcode = 'P0001';
+  if o.payment_method = 'cod' then
+    select coalesce(sum(cod_amount), 0) into allocated_total
+    from public.shipments
+    where order_id = o.id and status not in ('cancelled', 'returned');
+    if allocated_total <> o.total then
+      raise exception 'COD allocation mismatch: active seller shipments total %, order total %',
+        allocated_total, o.total using errcode = 'P0001';
+    end if;
   end if;
 end $$;
 revoke execute on function public._ensure_rider_shipments(uuid) from public, anon, authenticated;
