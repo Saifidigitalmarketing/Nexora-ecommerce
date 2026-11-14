@@ -52,6 +52,23 @@ as $$
 $$;
 revoke all on function public._allocated_order_component(uuid, uuid, numeric) from public, anon, authenticated;
 
+create or replace function public._seller_cod_allocation(p_order uuid, p_vendor uuid)
+returns numeric
+language sql
+stable
+security definer
+set search_path = public
+as $
+  select coalesce(sum(oi.line_total), 0)
+    - public._allocated_order_component(p_order, p_vendor, o.discount_total)
+    + public._allocated_order_component(p_order, p_vendor, o.delivery_charge)
+  from public.orders o
+  left join public.order_items oi on oi.order_id = o.id and oi.vendor_id = p_vendor
+  where o.id = p_order
+  group by o.discount_total, o.delivery_charge;
+$;
+revoke all on function public._seller_cod_allocation(uuid, uuid) from public, anon, authenticated;
+
 create or replace function public._ensure_rider_shipments(p_order uuid)
 returns void
 language plpgsql
@@ -96,9 +113,7 @@ begin
     order by vendor_id
   loop
     if o.payment_method = 'cod' then
-      seller_cod := r.items_total
-        - public._allocated_order_component(o.id, r.vendor_id, o.discount_total)
-        + public._allocated_order_component(o.id, r.vendor_id, o.delivery_charge);
+       seller_cod := public._seller_cod_allocation(o.id, r.vendor_id);
       if seller_cod < 0 then
         raise exception 'Invalid COD allocation for seller %', r.vendor_id using errcode = 'P0001';
       end if;
@@ -119,13 +134,7 @@ begin
            else 'not_applicable'::public.cod_settlement_status end,
       'Booked automatically for NEXORA rider delivery'
     )
-    on conflict (order_id, vendor_id) do update set
-      cod_amount = excluded.cod_amount
-    where shipments.cod_settlement_status <> 'verified'
-      and not exists (
-        select 1 from public.seller_settlements ss
-        where ss.shipment_id = shipments.id and ss.status in ('available', 'approved', 'paid')
-      )
+    on conflict (order_id, vendor_id) do nothing
     returning id into sid;
 
     if sid is not null then
@@ -252,6 +261,11 @@ security definer
 set search_path = public
 as $$
 begin
+  if tg_op = 'DELETE' and old.status in ('available', 'approved', 'paid') then
+    raise exception 'Available/finalized seller settlements cannot be deleted' using errcode = 'P0001';
+  end if;
+  if tg_op = 'DELETE' then return old; end if;
+
   if old.status = 'paid' then
     raise exception 'Paid seller settlements are immutable' using errcode = 'P0001';
   end if;
@@ -280,7 +294,7 @@ end $$;
 
 drop trigger if exists seller_settlements_financial_lock on public.seller_settlements;
 create trigger seller_settlements_financial_lock
-before update on public.seller_settlements
+before update or delete on public.seller_settlements
 for each row execute function public.guard_finalized_seller_settlement();
 
 -- Preserve the existing admin workflow for unverified shipments. A verified,
@@ -307,6 +321,7 @@ declare
   sid uuid;
   cur public.shipments;
   settlement_state public.seller_settlement_status;
+  expected_cod numeric(12,2);
 begin
   if not public.is_admin() then
     raise exception 'Not authorised' using errcode = '42501';
@@ -326,6 +341,19 @@ begin
     or coalesce(p_courier_charges, 0) < 0
     or coalesce(p_other_deductions, 0) < 0 then
     raise exception 'Amounts cannot be negative' using errcode = '22023';
+  end if;
+
+  if o.payment_method = 'cod' then
+    if exists (select 1 from public.order_items where order_id = p_order and vendor_id is null) then
+      raise exception 'Cannot allocate COD: one or more order items have no seller' using errcode = 'P0001';
+    end if;
+    expected_cod := public._seller_cod_allocation(p_order, p_vendor);
+    if round(coalesce(p_cod_amount, 0), 2) is distinct from expected_cod then
+      raise exception 'COD amount for this seller must be Rs. % (allocated from order total)', expected_cod
+        using errcode = '22023';
+    end if;
+  elsif coalesce(p_cod_amount, 0) <> 0 then
+    raise exception 'Prepaid shipments must have zero COD amount' using errcode = '22023';
   end if;
 
   select * into cur from public.shipments
