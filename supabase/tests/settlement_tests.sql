@@ -489,4 +489,133 @@ begin
 end $$;
 reset role;
 
+
+
+\echo 'S12. COD allocation reconciles discounts, delivery and paisa rounding'
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
+do $
+declare r jsonb;
+begin
+  r := public.place_order(jsonb_build_array(
+      jsonb_build_object('product_id', (select id from public.products where slug = 'anker-nano-30w-charger'), 'quantity', 1),
+      jsonb_build_object('product_id', (select id from public.products where slug = 'sapphire-egyptian-cotton-kurta-charcoal'), 'quantity', 1)),
+    '{"full_name": "Sara Ahmed", "phone": "03011234567"}',
+    '{"province": "Punjab", "city": "Lahore", "area": "Gulberg", "address_line": "House 1, Main Blvd"}', 'cod');
+  insert into t_9 values ('allocation', (r ->> 'order_id')::uuid);
+end $;
+reset role;
+-- Simulate an order snapshot with a non-even discount and delivery amount;
+-- this tests the allocator independently of coupon configuration.
+update public.orders
+set discount_total = 1.01,
+    delivery_charge = 2.02,
+    total = subtotal - 1.01 + 2.02
+where id = (select id from t_9 where k = 'allocation');
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000ad', false);
+do $
+declare
+  o uuid := (select id from t_9 where k = 'allocation');
+  expected numeric;
+begin
+  perform public.admin_assign_rider(o, '00000000-0000-0000-0000-0000000000e1');
+  select total into expected from public.orders where id = o;
+  assert (select sum(cod_amount) from public.shipments where order_id = o) = expected,
+    'multi-seller COD shipments do not sum to customer total';
+  assert (select count(*) from public.shipments where order_id = o) = 2,
+    'expected one shipment per seller';
+  assert public._allocated_order_component(o,
+    (select vendor_id from public.order_items where order_id = o order by vendor_id limit 1), 1.01) >= 0,
+    'discount allocation negative';
+  assert public._allocated_order_component(o,
+    (select vendor_id from public.order_items where order_id = o order by vendor_id limit 1), 0) = 0,
+    'zero amount allocation is not zero';
+end $;
+reset role;
+
+\echo 'S13. verified shipments and available/finalized settlements are locked'
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000ad', false);
+do $
+declare
+  o uuid := (select id from t_9 where k = 'allocation');
+  sh uuid;
+  st uuid;
+  v uuid;
+begin
+  -- Move both rider shipments through delivery, then verify COD.
+  perform public.admin_update_order_status(o, 'confirmed', null);
+  perform public.admin_update_order_status(o, 'picked_up', null);
+  perform public.admin_update_order_status(o, 'on_the_way', null);
+  perform public.admin_update_order_status(o, 'delivered', null);
+
+  for sh in select id from public.shipments where order_id = o loop
+    perform public.admin_verify_cod(sh,
+      (select cod_amount from public.shipments where id = sh), current_date, 'LOCK-TEST');
+  end loop;
+
+  select id into sh from public.shipments where order_id = o limit 1;
+  select id into st from public.seller_settlements where shipment_id = sh;
+  select vendor_id into v from public.shipments where id = sh;
+
+  begin
+    perform public.admin_save_shipment(o, v, (select id from public.couriers where code = 'tcs'),
+      'CHANGED-TRACK', 'booked', 1, 0, 0);
+    raise exception 'admin_save_shipment changed verified shipment';
+  exception when sqlstate 'P0001' then null; end;
+
+  begin
+    update public.shipments set status = 'booked', tracking_number = 'DIRECT-CHANGE' where id = sh;
+    raise exception 'direct update changed verified shipment';
+  exception when sqlstate 'P0001' then null; end;
+
+  begin
+    delete from public.shipments where id = sh;
+    raise exception 'delete removed verified shipment';
+  exception when sqlstate 'P0001' then null; end;
+
+  assert (select status from public.seller_settlements where id = st) = 'available',
+    'verified COD did not create available settlement';
+
+  begin
+    update public.seller_settlements set seller_payable = seller_payable + 1 where id = st;
+    raise exception 'available settlement amount changed';
+  exception when sqlstate 'P0001' then null; end;
+
+  perform public.admin_approve_settlement(st, 'Lock test approval');
+  begin
+    update public.seller_settlements set status = 'pending' where id = st;
+    raise exception 'approved settlement reversed without correction workflow';
+  exception when sqlstate 'P0001' then null; end;
+end $;
+reset role;
+
+\echo 'S14. pre-verification cancellation remains supported'
+set role authenticated;
+select set_config('request.jwt.claim.sub', '0000000000000000000000000000000b', false);
+do $
+declare r jsonb;
+begin
+  r := public.place_order(jsonb_build_array(
+      jsonb_build_object('product_id', (select id from public.products where slug = 'anker-nano-30w-charger'), 'quantity', 1)),
+    '{"full_name": "Sara Ahmed", "phone": "03011234567"}',
+    '{"province": "Punjab", "city": "Lahore", "area": "Gulberg", "address_line": "House 1, Main Blvd"}', 'cod');
+  insert into t_9 values ('safe_cancel', (r ->> 'order_id')::uuid);
+end $;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000ad', false);
+do $
+declare o uuid := (select id from t_9 where k = 'safe_cancel');
+begin
+  perform public.admin_assign_rider(o, '00000000-0000-0000-0000-0000000000e1');
+  perform public.admin_update_order_status(o, 'cancelled', 'Customer cancelled before dispatch');
+  assert (select status from public.shipments where order_id = o) = 'cancelled',
+    'legitimate open-shipment cancellation failed';
+  assert (select status from public.seller_settlements where order_id = o) = 'cancelled',
+    'open seller settlement was not cancelled';
+end $;
+reset role;
+
+\echo 'ALL EXTENDED SETTLEMENT TESTS PASSED'
+
 \echo 'ALL SETTLEMENT TESTS PASSED'
