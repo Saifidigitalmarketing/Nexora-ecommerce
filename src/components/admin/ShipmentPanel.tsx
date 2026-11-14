@@ -27,6 +27,41 @@ export interface OrderSellerPart {
   itemsTotal: number;
 }
 
+function allocatePaisa(parts: OrderSellerPart[], amount: number) {
+  const totalPaisa = BigInt(Math.round(amount * 100));
+  const weights = parts.map((part) => BigInt(Math.round(part.itemsTotal * 100)));
+  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0n);
+  const denominator = totalWeight > 0n ? totalWeight : BigInt(parts.length || 1);
+  const shares = parts.map((part, index) => {
+    const numerator = totalPaisa * (totalWeight > 0n ? weights[index] : 1n);
+    return {
+      vendorId: part.vendorId,
+      paisa: numerator / denominator,
+      remainder: numerator % denominator,
+    };
+  });
+  let remaining = totalPaisa - shares.reduce((sum, share) => sum + share.paisa, 0n);
+  const ranked = [...shares].sort((a, b) => {
+    if (a.remainder === b.remainder) return a.vendorId.localeCompare(b.vendorId);
+    return a.remainder > b.remainder ? -1 : 1;
+  });
+  for (let i = 0; remaining > 0n; i++, remaining--) {
+    ranked[i % ranked.length].paisa += 1n;
+  }
+  return new Map(shares.map((share) => [share.vendorId, Number(share.paisa) / 100]));
+}
+
+function suggestedSellerCod(
+  parts: OrderSellerPart[],
+  part: OrderSellerPart,
+  discountTotal: number,
+  deliveryCharge: number,
+) {
+  const discount = allocatePaisa(parts, discountTotal).get(part.vendorId) ?? 0;
+  const delivery = allocatePaisa(parts, deliveryCharge).get(part.vendorId) ?? 0;
+  return Math.round((part.itemsTotal - discount + delivery) * 100) / 100;
+}
+
 function toLocalInput(iso: string | null) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -51,7 +86,12 @@ function PartForm({
 }) {
   const router = useRouter();
   const toast = useToast();
-  const locked = shipment?.cod_settlement_status === "verified";
+  const locked =
+    shipment?.cod_settlement_status === "verified" ||
+    shipment?.cod_settlement_status === "disputed" ||
+    settlement?.status === "available" ||
+    settlement?.status === "approved" ||
+    settlement?.status === "paid";
   const [v, setV] = useState({
     courier_id: shipment?.courier_id ?? couriers[0]?.id ?? "",
     tracking: shipment?.tracking_number ?? "",
@@ -97,6 +137,7 @@ function PartForm({
       </div>
       <div className="grid grid-cols-2 gap-2">
         <Select
+          disabled={locked}
           label="Courier"
           name={`courier_${part.vendorId}`}
           value={v.courier_id}
@@ -111,21 +152,21 @@ function PartForm({
             </option>
           ))}
         </Select>
-        <Input label="Tracking number" name={`tracking_${part.vendorId}`} value={v.tracking} onChange={(e) => setV({ ...v, tracking: e.target.value })} />
-        <Select label="Shipment status" name={`status_${part.vendorId}`} value={v.status} onChange={(e) => setV({ ...v, status: e.target.value as ShipmentStatus })}>
+        <Input disabled={locked} label="Tracking number" name={`tracking_${part.vendorId}`} value={v.tracking} onChange={(e) => setV({ ...v, tracking: e.target.value })} />
+        <Select disabled={locked} label="Shipment status" name={`status_${part.vendorId}`} value={v.status} onChange={(e) => setV({ ...v, status: e.target.value as ShipmentStatus })}>
           {(Object.keys(SHIPMENT_STATUS_LABEL) as ShipmentStatus[]).map((s) => (
             <option key={s} value={s}>
               {SHIPMENT_STATUS_LABEL[s]}
             </option>
           ))}
         </Select>
-        <Input label="Delivery date" optional name={`delivered_${part.vendorId}`} type="datetime-local" value={v.delivered_at} onChange={(e) => setV({ ...v, delivered_at: e.target.value })} />
+        <Input disabled={locked} label="Delivery date" optional name={`delivered_${part.vendorId}`} type="datetime-local" value={v.delivered_at} onChange={(e) => setV({ ...v, delivered_at: e.target.value })} />
         <Input label="COD amount (Rs.)" name={`cod_${part.vendorId}`} inputMode="decimal" disabled={locked} value={v.cod} onChange={(e) => setV({ ...v, cod: e.target.value.replace(/[^\d.]/g, "") })} />
         <Input label="Courier charges (Rs.)" name={`charges_${part.vendorId}`} inputMode="decimal" disabled={locked} value={v.charges} onChange={(e) => setV({ ...v, charges: e.target.value.replace(/[^\d.]/g, "") })} />
         <Input label="Other courier deductions" optional name={`other_${part.vendorId}`} inputMode="decimal" disabled={locked} value={v.other} onChange={(e) => setV({ ...v, other: e.target.value.replace(/[^\d.]/g, "") })} />
       </div>
-      {locked ? <p className="font-body-sm text-body-sm text-secondary">COD is verified — amounts are locked.</p> : null}
-      <Button size="sm" loading={busy} onClick={() => void save()}>
+      {locked ? <p className="font-body-sm text-body-sm text-secondary">Financial shipment details are locked. Use the audited COD correction workflow for an eligible verification correction.</p> : null}
+      <Button size="sm" disabled={locked} loading={busy} onClick={() => void save()}>
         {shipment ? "Update shipment" : "Book shipment"}
       </Button>
 
@@ -170,14 +211,16 @@ function PartForm({
 /** Courier shipments for an order — one per seller. */
 export function ShipmentPanel({
   orderId,
-  orderTotal,
+  discountTotal,
+  deliveryCharge,
   parts,
   shipments,
   settlements,
   couriers,
 }: {
   orderId: string;
-  orderTotal: number;
+  discountTotal: number;
+  deliveryCharge: number;
   parts: OrderSellerPart[];
   shipments: Shipment[];
   settlements: SellerSettlement[];
@@ -200,8 +243,8 @@ export function ShipmentPanel({
             key={p.vendorId}
             orderId={orderId}
             part={p}
-            // single-seller orders: COD is the whole order total; multi-seller: that seller's items
-            suggestedCod={parts.length === 1 ? orderTotal : p.itemsTotal}
+            // Same largest-remainder paisa allocation as the database.
+            suggestedCod={suggestedSellerCod(parts, p, discountTotal, deliveryCharge)}
             shipment={sh}
             settlement={sh ? settlements.find((s) => s.shipment_id === sh.id) : undefined}
             couriers={couriers}
