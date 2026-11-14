@@ -521,7 +521,10 @@ begin
     ),
     jsonb_build_object(
       'cod_settlement_status', 'disputed',
-      'seller_settlement_status', 'pending'
+      'cod_received_amount', s.cod_received_amount,
+      'cod_settlement_reference', s.cod_settlement_reference,
+      'seller_settlement_status', 'pending',
+      'seller_payable', st.seller_payable
     ),
     auth.uid()
   );
