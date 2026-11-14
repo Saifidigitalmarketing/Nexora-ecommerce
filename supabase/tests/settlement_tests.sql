@@ -124,7 +124,7 @@ begin
     perform public.admin_save_shipment((select id from t_s), (select id from public.vendors where slug = 'sapphire-official'),
       (select id from public.couriers where code = 'tcs'), 'TCS123456', 'delivered', 1, 0, 0);
     raise exception 'changed amounts after verification';
-  exception when sqlstate 'P0001' then null; end;
+  exception when sqlstate 'P0001' or insufficient_privilege then null; end;
   perform public.admin_approve_settlement(st);
   begin
     perform public.admin_mark_settlement_paid(st, '  ');
@@ -216,7 +216,7 @@ begin
   begin
     perform public.admin_verify_cod(sh, 1, current_date, 'X', 'disputed');
     raise exception 'COD changed after settlement approved';
-  exception when sqlstate 'P0001' then null; end;
+  exception when sqlstate 'P0001' or insufficient_privilege then null; end;
 end $$;
 
 -- (b) external courier flow: admin marks the order delivered
@@ -330,7 +330,7 @@ begin
   begin
     perform public.admin_approve_settlement((select id from public.seller_settlements where order_id = o limit 1));
     raise exception 'approved before COD verified';
-  exception when sqlstate 'P0001' then null; end;
+  exception when sqlstate 'P0001' or insufficient_privilege then null; end;
   for sh in select id from public.shipments where order_id = o loop
     perform public.admin_verify_cod(sh, (select cod_amount from public.shipments where id = sh), current_date, 'HANDOVER-9');
   end loop;
@@ -375,11 +375,11 @@ begin
   begin
     perform public.admin_approve_settlement(st);
     raise exception 'approved a cancelled settlement';
-  exception when sqlstate 'P0001' then null; end;
+  exception when sqlstate 'P0001' or insufficient_privilege then null; end;
   begin
     perform public.admin_save_shipment(o, anker, tcs, 'TCS-S10', 'delivered', public._seller_cod_allocation(o, (select id from public.vendors where slug = 'anker-official')), 250, 0);
     raise exception 'revived shipment of cancelled order';
-  exception when sqlstate 'P0001' then null; end;
+  exception when sqlstate 'P0001' or insufficient_privilege then null; end;
   assert (select status from public.seller_settlements where shipment_id = sh) = 'cancelled', 'cancelled settlement revived';
   -- recompute after a commission change keeps it cancelled
   perform public.admin_recompute_open_settlements();
@@ -432,7 +432,7 @@ begin
   begin
     perform public.admin_update_order_status(o, 'cancelled', null);
     raise exception 'cancelled an order with a delivered shipment';
-  exception when sqlstate 'P0001' then null; end;
+  exception when sqlstate 'P0001' or insufficient_privilege then null; end;
   assert (select status from public.orders where id = o) <> 'cancelled', 'order cancelled despite delivered shipment';
   assert (select status from public.seller_settlements where shipment_id = sh) = 'pending', 'delivered settlement touched';
   -- returned first, then the cancel goes through and closes everything
@@ -603,17 +603,17 @@ begin
     perform public.admin_save_shipment(o, v, (select id from public.couriers where code = 'tcs'),
       'CHANGED-TRACK', 'booked', 1, 0, 0);
     raise exception 'admin_save_shipment changed verified shipment' using errcode = '22000';
-  exception when sqlstate 'P0001' then null; end;
+  exception when sqlstate 'P0001' or insufficient_privilege then null; end;
 
   begin
     update public.shipments set status = 'booked', tracking_number = 'DIRECT-CHANGE' where id = sh;
     raise exception 'direct update changed verified shipment' using errcode = '22000';
-  exception when sqlstate 'P0001' then null; end;
+  exception when sqlstate 'P0001' or insufficient_privilege then null; end;
 
   begin
     delete from public.shipments where id = sh;
     raise exception 'delete removed verified shipment' using errcode = '22000';
-  exception when sqlstate 'P0001' then null; end;
+  exception when sqlstate 'P0001' or insufficient_privilege then null; end;
 
   assert (select status from public.seller_settlements where id = st) = 'available',
     'verified COD did not create available settlement';
@@ -638,24 +638,51 @@ begin
   begin
     update public.seller_settlements set seller_payable = seller_payable + 1 where id = st;
     raise exception 'available settlement amount changed' using errcode = '22000';
-  exception when sqlstate 'P0001' then null; end;
+  exception when sqlstate 'P0001' or insufficient_privilege then null; end;
 
   perform public.admin_approve_settlement(st, 'Lock test approval');
   begin
     update public.seller_settlements set status = 'pending' where id = st;
     raise exception 'approved settlement reversed without correction workflow' using errcode = '22000';
-  exception when sqlstate 'P0001' then null; end;
+  exception when sqlstate 'P0001' or insufficient_privilege then null; end;
   perform public.admin_mark_settlement_paid(st, 'LOCK-TEST-PAID');
   begin
     update public.seller_settlements set status = 'available' where id = st;
     raise exception 'paid settlement changed' using errcode = '22000';
-  exception when sqlstate 'P0001' then null; end;
+  exception when sqlstate 'P0001' or insufficient_privilege then null; end;
   begin
     delete from public.seller_settlements where id = st;
     raise exception 'paid settlement deleted' using errcode = '22000';
-  exception when sqlstate 'P0001' then null; end;
+  exception when sqlstate 'P0001' or insufficient_privilege then null; end;
 end $$;
 reset role;
+
+
+-- Elevated direct-write attempts must still hit the database triggers even
+-- when run by a privileged database role (not merely be stopped by table grants).
+do $
+declare
+  sh uuid := (select id from public.shipments where order_id = (select id from t_9 where k = 'allocation') limit 1);
+  st uuid := (select id from public.seller_settlements where shipment_id =
+    (select id from public.shipments where order_id = (select id from t_9 where k = 'allocation') limit 1));
+begin
+  begin
+    update public.shipments set status = 'booked' where id = sh;
+    raise exception 'privileged direct shipment update bypassed financial lock' using errcode = '22000';
+  exception when sqlstate 'P0001' then null; end;
+  begin
+    delete from public.shipments where id = sh;
+    raise exception 'privileged direct shipment delete bypassed financial lock' using errcode = '22000';
+  exception when sqlstate 'P0001' then null; end;
+  begin
+    update public.seller_settlements set seller_payable = seller_payable + 1 where id = st;
+    raise exception 'privileged direct settlement update bypassed financial lock' using errcode = '22000';
+  exception when sqlstate 'P0001' then null; end;
+  begin
+    delete from public.seller_settlements where id = st;
+    raise exception 'privileged direct settlement delete bypassed financial lock' using errcode = '22000';
+  exception when sqlstate 'P0001' then null; end;
+end $;
 
 \echo 'S14. pre-verification cancellation remains supported'
 set role authenticated;
