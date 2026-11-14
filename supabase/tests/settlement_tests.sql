@@ -525,9 +525,9 @@ begin
     'multi-seller COD shipments do not sum to customer total';
   assert (select count(*) from public.shipments where order_id = o) = 2,
     'expected one shipment per seller';
-end $;
+end $$;
 reset role;
-do $
+do $$
 declare
   o uuid := (select id from t_9 where k = 'allocation');
   v uuid := (select vendor_id from public.order_items where order_id = (select id from t_9 where k = 'allocation') order by vendor_id limit 1);
@@ -536,7 +536,7 @@ begin
     'zero amount allocation is not zero';
   assert public._allocated_order_component(o, v, 1.01) >= 0,
     'discount allocation negative';
-end $;
+end $$;
 
 
 \echo 'S12b. zero-subtotal COD orders allocate delivery without division by zero'
