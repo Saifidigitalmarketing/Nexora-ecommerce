@@ -261,7 +261,7 @@ begin
   where shipment_id = old.id;
 
   locked := old.cod_settlement_status = 'verified'
-    or settlement_state in ('available', 'approved', 'paid')
+    or settlement_state in ('available', 'approved', 'paid', 'on_hold')
     or exists (select 1 from public.shipment_correction_audit a where a.shipment_id = old.id);
 
   if locked then
